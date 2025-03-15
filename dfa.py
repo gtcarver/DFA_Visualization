@@ -2,12 +2,16 @@
 class State:
     _id_ = 0 # giving each state a unique id
 
-    def __init__(self, name, is_start=False, is_accept=False):
+    def __init__(self, name, delta=None, is_start=False, is_accept=False):
         self.name = name # string for state label
         self.is_start = is_start # boolean for if state is a start state
         self.is_accept = is_accept # boolean for if state is an accept state
         self.id = State._id_ # assign unique id
         State._id_ += 1
+        # dictionary for all transitions from the current state
+        # each key should be a string
+        # each value should be a state object
+        self.delta = delta if delta is not None else {}
 
     # used for checking equivalence of states
     def __eq__(self, other):
@@ -19,57 +23,57 @@ class State:
     
     # printing
     def __repr__(self):
-        return f"State('{self.name}')"
+        transitions_str = ", ".join(
+            f"({self.name}, '{a}') -> {self.delta[a].name}"
+            for a in self.delta
+        )
+        return f"State('{self.name}', Start state: {self.is_start}, Accept state: {self.is_accept}, Transitions: [{transitions_str}])"
 
 # Class for the DFA as a whole
 class DFA:
-    def __init__(self, name, states=[], alphabet=[], delta={}):
+    def __init__(self, name, states=None, alphabet=None):
         self.name = name # string for DFA name
-        self.states = states # list of state objects in DFA
-        self.alphabet = alphabet # list of strings representing each symbol in the alphabet
-
-        # dictionary for all state transitions
-        # each key should be a tuple (q, a), where q is a state object, and a is a string
-        # each value should be a state object
-        self.delta = delta
+        self.states = states if states is not None else [] # list of state objects in DFA
+        self.alphabet = alphabet if states is not None else [] # list of strings representing each symbol in the alphabet
 
     def __repr__(self):
         states_str = ", ".join(state.name for state in self.states)
         alphabet_str = ", ".join(self.alphabet)
-        transitions_str = ", ".join(
-            f"({s.name}, '{a}') -> {self.delta[(s, a)].name}"
-            for s, a in self.delta
-        )
-        return f"DFA('{self.name}', States: [{states_str}], Alphabet: [{alphabet_str}], Transitions: {{{transitions_str}}})"
+        return f"DFA('{self.name}', States: [{states_str}], Alphabet: [{alphabet_str}])"
 
     # Determines if dfa has a valid construction
     # Returns a tuple (b, e), where b is a boolean for validity, and e is a string explaining the result b
     def is_valid(self):
         # Check to ensure there is exactly 1 start state and no state shares a name with another
         found_start = False
-        states = []
+        state_names = []
         for state in self.states:
             if state.is_start == True:
                 if found_start:
-                    return (False, "Invalid DFA. More than one state.")
+                    return (False, "Invalid DFA. More than one start state.")
                 found_start = True
 
-            if state in states:
+            if state.name in state_names:
                 return (False, "Invalid DFA. States cannot share a name.")
-            states.append(state)
+            state_names.append(state.name)
 
         if not found_start:
             return (False, "Invalid DFA. No start states found.")
         
         # Check to ensure for every state q and every symbol a in the alphabet, there is exactly one defined transition
+        # Also check to ensure every transition is in the alphabet (Q x Sigma -> Q)
         # Currently thinking making multiple arrows with the same transitiion value should be handled in the visualizer,
         # because a key will simply be overwritten before this validation check is ran, creating a ghost transition arrow
         for state in self.states:
             for symbol in self.alphabet:
-                if (state, symbol) not in self.delta:
-                    return (False, "Invalid DFA. (" + state.name + ", " + symbol + ") does not have a defined transition.")
-                if self.delta[(state, symbol)] not in self.states:
-                    return (False, "Invalid DFA. The state transition is not in the set of states.")
+                if symbol not in state.delta:
+                    return (False, f"Invalid DFA. ({state.name}, {symbol}) does not have a defined transition.")
+                if state.delta[symbol] not in self.states:
+                    return (False, f"Invalid DFA. \u03b4({state.name}, {symbol}) -> {state.delta[symbol].name} is not in the set of states.")
+            # Ensuring each transition is in the alphabet
+            for symbol in state.delta:
+                if symbol not in self.alphabet:
+                    return (False, f"{state.name} has a transition on '{symbol}', but '{symbol}' is not in the alphabet.")
 
         return (True, "Valid DFA.")
 
@@ -95,7 +99,7 @@ class DFA:
                 return False
             
             # Transition to next state
-            current_state = self.delta[(current_state, symbol)]
+            current_state = current_state.delta[symbol]
 
         # After reading through string, return whether or not current state is an accept state
         return current_state.is_accept
@@ -104,15 +108,16 @@ class DFA:
     # User must hit enter to proceed through the simulation
     # Returns nothing
     def walkthrough(self, string):
-        print("DFA " + self.name + " processessing string " + string + ":\n")
+        print(f"DFA {self.name} processessing string {string}:\n")
         # First confirm machine is valid
-        input("Validating DFA " + self.name + ". Press enter to continue...")
+        input(f"Validating DFA {self.name}. Press enter to continue...")
         valid, explanation = self.is_valid()
         if not valid:
             print(explanation)
             print("Termininating.")
             return
-        input(explanation + " Press enter to continue...")
+        input(f"{explanation} Press enter to continue...")
+
         # Find start state
         current_state = None
         for state in self.states:
@@ -120,34 +125,34 @@ class DFA:
                 current_state = state
                 break
         
-        input("Start state is " + current_state.name + ". Press enter to continue...")
+        input(f"Start state is {current_state.name}. Press enter to continue...")
                 
         # Transition from state to state following the symbols in the string and the transition function
         for symbol in string:
-            print("\nCurrent state: " + current_state.name)
-            print("Current read symbol: " + symbol)
+            print(f"\nCurrent state: {current_state.name}")
+            print(f"Current read symbol: {symbol}")
             input("Press enter to continue...")
             # Confirm symbol is in the alphabet
             if symbol not in self.alphabet:
-                print("Symbol", symbol, "is not in the alphabet " + str(self.alphabet) + ".")
-                print(string, "is rejected.")
+                print(f"Symbol '{symbol}' is not in the alphabet {self.alphabet}.")
+                print(f"{string} is rejected by DFA {self.name}.")
                 return
             
             # Transition to next state
-            print("\u03b4(" + current_state.name + ", " + symbol + ") -> " + self.delta[(current_state, symbol)].name)
+            print(f"\u03b4({current_state.name}, '{symbol}') -> {current_state.delta[symbol].name}")
             input("Press enter to continue...")
-            current_state = self.delta[(current_state, symbol)]
+            current_state = current_state.delta[symbol]
 
         # After reading through string, decide whether or not current state is an accept state
         print("No more symbols in string.")
-        print("Machine ended on state " + current_state.name + ".")
+        print(f"Machine ended on state {current_state.name}.")
         if current_state.is_accept:
-            print(current_state.name + " is an accept state.")
-            print(string, "is accepted.")
+            print(f"{current_state.name} is an accept state.")
+            print(f"{string} is accepted by DFA {self.name}.")
             return
         
-        print(current_state.name + " is not an accept state.")
-        print(string, "is rejected.")
+        print(f"{current_state.name} is not an accept state.")
+        print(f"{string} is rejected by DFA {self.name}.")
 
 
 q1 = State("q1", is_start=True)
@@ -155,12 +160,13 @@ q2 = State("q2", is_accept=True)
 q3 = State("q3")
 
 d1 = DFA("D_1", [q1,q2,q3], ['0','1'])
-d1.delta[(q1,'0')] = q1
-d1.delta[(q1,'1')] = q2
-d1.delta[(q2,'0')] = q3
-d1.delta[(q2,'1')] = q2
-d1.delta[(q3,'0')] = q2
-d1.delta[(q3,'1')] = q2
+
+q1.delta['0'] = q1
+q1.delta['1'] = q2
+q2.delta['0'] = q3
+q2.delta['1'] = q2
+q3.delta['0'] = q2
+q3.delta['1'] = q2
 
 print(q1)
 print(q2)
