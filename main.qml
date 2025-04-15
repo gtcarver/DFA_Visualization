@@ -1,8 +1,10 @@
+pragma ComponentBehavior: Bound
+
 import QtQuick
 import QtQuick.Window
 import QtQuick.Controls
 import QtQuick.Layouts
-import QtQuick.Dialogs
+import QtQuick.Shapes
 
 
 ApplicationWindow {
@@ -12,7 +14,12 @@ ApplicationWindow {
 	visible: true
 	title: qsTr("DFA Visualizer")
 
-    property var dfa_states: [];
+    property var dfa_states: ({})
+    function hasOneState(): bool {
+        for (const x in mainWindow.dfa_states)
+            return true
+        return false
+    }
     property color acceptStateColor: "#a5d6a7"
     property color startStateColor: "#90caf9"
     property color normalStateColor: "#ffffff"
@@ -37,9 +44,9 @@ ApplicationWindow {
             Button {
                 text: "Add Transition"
                 onClicked: {
-                    if (dfa_states.length === 0 || alphabet.text.length === 0) {
+                    if (!mainWindow.hasOneState() || alphabet.text.length === 0) {
                         statusText.text = "Error: Adding transitions requires at least 1 state and an alphabet";
-                        statusText.color = errorColor;
+                        statusText.color = mainWindow.errorColor;
                         return;
                     }
                     transitionDialog.open();
@@ -75,21 +82,13 @@ ApplicationWindow {
                     let validation = dfaBackend.validate_dfa()
                     if (validation) {
                         statusText.text = "Error: " + validation;
-                        statusText.color = errorColor;
+                        statusText.color = mainWindow.errorColor;
                         return
                     }
 
                     let accepted = dfaBackend.accepts(inputString.text);
                     statusText.text = "Test result: " + (accepted ? "Accepted" : "Rejected");
                     statusText.color = accepted ? "green" : "red";
-                }
-            }
-
-            Button {
-                text: "Simulate"
-                onClicked: {
-                    simulationDialog.inputString = inputString.text;
-                    simulationDialog.open();
                 }
             }
 
@@ -125,17 +124,21 @@ ApplicationWindow {
             MouseArea {
                 id: background
                 anchors.fill: parent
-                onDoubleClicked: mouse => stateDialog.open()
-
+                onDoubleClicked: mouse => {
+                    stateDialog.clickX = mouse.x;
+                    stateDialog.clickY = mouse.y;
+                    stateDialog.open()
+                }
                 acceptedButtons: Qt.LeftButton
             }
 
             // Initial help text
             Text {
+                id: startText
                 anchors.centerIn: parent
                 text: "Double-click to begin building your DFA"
                 color: "gray"
-                visible: dfa_states.length === 0
+                visible: true
             }
         }
     }
@@ -170,14 +173,14 @@ ApplicationWindow {
             ComboBox {
                 id: fromStateCombo
                 Layout.fillWidth: true
-                model: dfa_states
+                model: Object.keys(mainWindow.dfa_states)
             }
             
             Label { text: "To:" }
             ComboBox {
                 id: toStateCombo
                 Layout.fillWidth: true
-                model: dfa_states
+                model: Object.keys(mainWindow.dfa_states)
             }
             
             Label { text: "On symbol:" }
@@ -187,14 +190,17 @@ ApplicationWindow {
                 model: alphabet.text.split("")
             }
         }
-
+        onAboutToShow: {
+            fromStateCombo.model = Object.keys(mainWindow.dfa_states);
+            toStateCombo.model = Object.keys(mainWindow.dfa_states);
+        }
         onAccepted: {
             dfaBackend.add_transition(
                 fromStateCombo.currentText,
                 transitionSymbol.currentText,
                 toStateCombo.currentText
             );
-            
+            transitionComponent.createObject(canvas, {fromState: mainWindow.dfa_states[fromStateCombo.currentText], toState: mainWindow.dfa_states[toStateCombo.currentText]})
             statusText.text = "Added transition";
             statusText.color = "black";
         }
@@ -208,7 +214,8 @@ ApplicationWindow {
         anchors.centerIn: parent
         width: parent.width / 3
         standardButtons: Dialog.Ok | Dialog.Cancel
-
+        property double clickX;
+        property double clickY;
         ColumnLayout {
             width: parent.width
             TextField {
@@ -229,31 +236,30 @@ ApplicationWindow {
         onAccepted: {
             if (stateName.text === "") {
                 statusText.text = "Error: State name cannot be empty";
-                statusText.color = errorColor;
+                statusText.color = mainWindow.errorColor;
                 return;
             }
-            if (dfa_states.includes(stateName.text)) {
+            if (mainWindow.dfa_states[stateName.text] !== undefined) {
                 statusText.text = "Error: State name already exists";
-                statusText.color = errorColor;
+                statusText.color = mainWindow.errorColor;
                 return;
             }
 
-            if (dfaBackend.add_state(stateName.text, isStartState.checked, isAcceptState.checked)) {
+            if (dfaBackend.add_state(stateName.text, isStartState.checked, isAcceptState.checked) === 1) {
                 statusText.text = "Error: There is already a start state. Remove it before adding a new one";
-                statusText.color = errorColor;
+                statusText.color = mainWindow.errorColor;
                 return;
             }
-            dfa_states += stateName.text
+            mainWindow.hideIntro();
 
             // Create visual state
-            var stateVisual = stateComponent.createObject(canvas, {
-                x: canvas.width/2 - 25,
-                y: canvas.height/2 - 25,
+            mainWindow.dfa_states[stateName.text] = stateComponent.createObject(canvas, {
+                x: clickX,
+                y: clickY,
                 stateName: stateName.text,
                 isStart: isStartState.checked,
                 isAccept: isAcceptState.checked
             });
-            
             statusText.text = "Added state";
             statusText.color = "black";
             stateName.text = "";
@@ -265,15 +271,14 @@ ApplicationWindow {
     // State visual component
     Component {
         id: stateComponent
-        
         Rectangle {
             id: stateVisual
             width: 60
             height: 60
             radius: width / 2
-            color: isActive ? activeStateColor : 
-                  (isAccept ? acceptStateColor : 
-                  (isStart ? startStateColor : normalStateColor))
+            color: isActive ? mainWindow.activeStateColor : 
+                  (isAccept ? mainWindow.acceptStateColor : 
+                  (isStart ? mainWindow.startStateColor : mainWindow.normalStateColor))
             border.color: "black"
             border.width: 2
             
@@ -319,7 +324,47 @@ ApplicationWindow {
             DragHandler {
                 target: stateVisual
             }
+            Component.onCompleted: {
+                this.x = this.x - this.width / 2;
+                this.y = this.y - this.width / 2;
+            }
         }
+    }
+    // Transition visual component
+    Component {
+        id: transitionComponent        
+        Shape {
+            id: transitionShape
+            anchors.fill: parent
+            layer.enabled: true
+            layer.samples: 8
+            antialiasing: true
+            property Rectangle fromState
+            property Rectangle toState
+            ShapePath {
+                id: transitionLine
+                property alias a: transitionShape.fromState
+                property alias b: transitionShape.toState
+                strokeWidth: 2
+                strokeColor: "black"
+                fillColor: "transparent"
+                pathHints: ShapePath.PathLinear | ShapePath.PathNonIntersecting
+                // (rsin(θ_a) + x_a, rcos(θ_a) + y_a) => (rsin(θ_b) + x_b, rcos(θ_b) + y_b)
+                property double scaleR: a.width / 2 / Math.sqrt((b.x - a.x) * (b.x - a.x) + (b.y - a.y) * (b.y - a.y))
+                startX: a.x + a.width / 2 + scaleR * (b.x - a.x)
+                startY: a.y + a.width / 2 + scaleR * (b.y - a.y)
+                PathLine {
+                    property alias a: transitionShape.fromState
+                    property alias b: transitionShape.toState
+                    x: b.x + b.width / 2 - transitionLine.scaleR * (b.x - a.x)
+                    y: b.y + b.height / 2 - transitionLine.scaleR * (b.y - a.y)
+                }
+            }
+            // TODO: tie arrowhead image to the orientation of this^ line
+        }
+    }
+    function hideIntro() {
+        startText.visible = false;
     }
 }
 

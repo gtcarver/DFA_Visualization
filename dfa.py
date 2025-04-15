@@ -76,7 +76,7 @@ class DFA(QObject):
     def add_transition(self, src, symbol, dst):
         self.states[src].delta[symbol] = self.states[dst]
 
-    @Slot(str, bool, bool)
+    @Slot(str, bool, bool, result=int)
     def add_state(self, name, start, accepting, result=int):
         if start and self.start_state:
             return 1

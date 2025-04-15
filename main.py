@@ -11,7 +11,7 @@ if __name__ == "__main__":
 
     # Create and expose the backend object
     dfa = DFA()
-    engine.rootContext().setContextProperty("dfaBackend", dfa)
+    engine.rootContext().setContextProperty("dfaBackend", dfa)    
 
     # Load QML file
     qml_file = Path(__file__).resolve().parent / "main.qml"
