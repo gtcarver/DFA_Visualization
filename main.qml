@@ -59,10 +59,15 @@ ApplicationWindow {
         }
 
         // Status bar
-        Label {
-            id: statusText
+        Rectangle {
             Layout.fillWidth: true
-            wrapMode: Text.Wrap
+            implicitHeight: statusText.implicitHeight
+            color: palette.alternateBase
+            Label {
+                id: statusText
+                anchors.fill: parent
+                wrapMode: Text.Wrap
+            }
         }
 
         // Simulation controls
@@ -97,27 +102,27 @@ ApplicationWindow {
                 onClicked: {
                     dfaBackend.reset();
                     canvas.clear();
+                    mainWindow.showIntro();
+                    mainWindow.dfa_states = {};
                     statusText.text = "DFA Reset";
-                    statusText.color = "black";
+                    statusText.color = palette.text;
                 }
             }
         }
-        // Canvas for DFA visualization
+        // Area for DFA visualization
         Rectangle {
             id: canvas
             Layout.fillWidth: true
             Layout.fillHeight: true
-            border.color: "gray"
-            border.width: 1
             clip: true
-
-            function clear() {
-                // Remove all children except the background
-                for (var i = children.length - 1; i >= 0; i--) {
-                    if (children[i].objectName !== "background") {
-                        children[i].destroy();
-                    }
-                }
+            
+            Item {id: state_container}
+            Item {
+                id: transition_container;
+                anchors.fill: parent;
+                layer.enabled: true;
+                layer.samples: 8;
+                antialiasing: true
             }
 
             // Clickable area for editing the DFA
@@ -139,6 +144,15 @@ ApplicationWindow {
                 text: "Double-click to begin building your DFA"
                 color: "gray"
                 visible: true
+            }
+            function clear() {
+                for (const child of transition_container.children) {
+                    child.layer.enabled = false;
+                    child.destroy();
+                }
+                for (const child of state_container.children) {
+                    child.destroy();
+                }
             }
         }
     }
@@ -195,14 +209,19 @@ ApplicationWindow {
             toStateCombo.model = Object.keys(mainWindow.dfa_states);
         }
         onAccepted: {
-            dfaBackend.add_transition(
+            const result = dfaBackend.add_transition(
                 fromStateCombo.currentText,
                 transitionSymbol.currentText,
                 toStateCombo.currentText
             );
-            transitionComponent.createObject(canvas, {fromState: mainWindow.dfa_states[fromStateCombo.currentText], toState: mainWindow.dfa_states[toStateCombo.currentText]})
+            if (result) {
+                statusText.color = mainWindow.errorColor;
+                statusText.text = result;
+                return;
+            }
+            transitionComponent.createObject(transition_container, {fromState: mainWindow.dfa_states[fromStateCombo.currentText], toState: mainWindow.dfa_states[toStateCombo.currentText]})
             statusText.text = "Added transition";
-            statusText.color = "black";
+            statusText.color = palette.text;
         }
     }
 
@@ -253,7 +272,7 @@ ApplicationWindow {
             mainWindow.hideIntro();
 
             // Create visual state
-            mainWindow.dfa_states[stateName.text] = stateComponent.createObject(canvas, {
+            mainWindow.dfa_states[stateName.text] = stateComponent.createObject(state_container, {
                 x: clickX,
                 y: clickY,
                 stateName: stateName.text,
@@ -261,7 +280,7 @@ ApplicationWindow {
                 isAccept: isAcceptState.checked
             });
             statusText.text = "Added state";
-            statusText.color = "black";
+            statusText.color = palette.text;
             stateName.text = "";
             isStartState.checked = false;
             isAcceptState.checked = false;
@@ -276,8 +295,8 @@ ApplicationWindow {
             width: 60
             height: 60
             radius: width / 2
-            color: isActive ? mainWindow.activeStateColor : 
-                  (isAccept ? mainWindow.acceptStateColor : 
+            color: isActive ? mainWindow.activeStateColor :
+                  (isAccept ? mainWindow.acceptStateColor :
                   (isStart ? mainWindow.startStateColor : mainWindow.normalStateColor))
             border.color: "black"
             border.width: 2
@@ -332,39 +351,64 @@ ApplicationWindow {
     }
     // Transition visual component
     Component {
-        id: transitionComponent        
+        id: transitionComponent   
         Shape {
-            id: transitionShape
+            id: shape
             anchors.fill: parent
-            layer.enabled: true
-            layer.samples: 8
-            antialiasing: true
             property Rectangle fromState
             property Rectangle toState
+            property var a: ({x: fromState.x + fromState.width / 2, y: fromState.y + fromState.width / 2})
+            property var b: ({x: toState.x + toState.width / 2, y: toState.y + toState.width / 2})
+
+            property double yd: b.y - a.y
+            property double xd: b.x - a.x
+
+            // line calcs
+            property double scaleR: fromState.width / 2 / Math.hypot(b.x - a.x, b.y - a.y)
+            property double ax_outer: a.x + scaleR * xd
+            property double ay_outer: a.y + scaleR * yd
+            property double bx_outer: b.x - scaleR * xd
+            property double by_outer: b.y - scaleR * yd
+
+            property double theta: Math.atan2(b.y - a.y, b.x - a.x)
             ShapePath {
-                id: transitionLine
-                property alias a: transitionShape.fromState
-                property alias b: transitionShape.toState
                 strokeWidth: 2
                 strokeColor: "black"
-                fillColor: "transparent"
-                pathHints: ShapePath.PathLinear | ShapePath.PathNonIntersecting
-                // (rsin(θ_a) + x_a, rcos(θ_a) + y_a) => (rsin(θ_b) + x_b, rcos(θ_b) + y_b)
-                property double scaleR: a.width / 2 / Math.sqrt((b.x - a.x) * (b.x - a.x) + (b.y - a.y) * (b.y - a.y))
-                startX: a.x + a.width / 2 + scaleR * (b.x - a.x)
-                startY: a.y + a.width / 2 + scaleR * (b.y - a.y)
-                PathLine {
-                    property alias a: transitionShape.fromState
-                    property alias b: transitionShape.toState
-                    x: b.x + b.width / 2 - transitionLine.scaleR * (b.x - a.x)
-                    y: b.y + b.height / 2 - transitionLine.scaleR * (b.y - a.y)
+                PathPolyline {
+                    property double q: 10
+                    property double opening: 90 / 180 * Math.PI
+                    property double xPreRotate: -q * Math.cos(opening / 2)
+                    property double yPreRotate: -q * Math.sin(opening / 2)
+                    property double yPreRotate2: q * Math.sin(opening / 2)
+                    property double sn: Math.sin(shape.theta)
+                    property double cs: Math.cos(shape.theta)
+                    path: [
+                        Qt.point(shape.ax_outer, shape.ay_outer),
+                        Qt.point(shape.bx_outer, shape.by_outer),
+                        Qt.point(
+                            shape.bx_outer + xPreRotate * cs - yPreRotate2 * sn,
+                            shape.by_outer + xPreRotate * sn + yPreRotate2 * cs
+                        ),
+                        Qt.point(shape.bx_outer, shape.by_outer),
+                        Qt.point(
+                            shape.bx_outer + xPreRotate * cs - yPreRotate * sn,
+                            shape.by_outer + xPreRotate * sn + yPreRotate * cs
+                        )
+                    ]
                 }
             }
-            // TODO: tie arrowhead image to the orientation of this^ line
+        }
+    }
+    Component {
+        id: selfLoop
+        Shape {
+
         }
     }
     function hideIntro() {
         startText.visible = false;
     }
+    function showIntro() {
+        startText.visible = true;
+    }
 }
-

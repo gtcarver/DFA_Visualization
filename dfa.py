@@ -63,7 +63,7 @@ class DFA(QObject):
 
     @Slot()
     def reset(self):
-        self.alphabet = []
+        self.alphabet = ""
         self.states = {}
         self.accepting_states = {}
         self.start_state = None
@@ -72,8 +72,10 @@ class DFA(QObject):
     def setAlphabet(self, alphabet):
         self.alphabet = alphabet
 
-    @Slot(str, str, str)
+    @Slot(str, str, str, result=str)
     def add_transition(self, src, symbol, dst):
+        if self.states[src].delta.get(symbol):
+            return f"({src}, {symbol}) already exists"
         self.states[src].delta[symbol] = self.states[dst]
 
     @Slot(str, bool, bool, result=int)
@@ -86,5 +88,3 @@ class DFA(QObject):
         if accepting:
             self.accepting_states[self.states[name]] = True
         return 0
-
-
