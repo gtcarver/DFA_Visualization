@@ -88,3 +88,5 @@ class DFA(QObject):
         if accepting:
             self.accepting_states[self.states[name]] = True
         return 0
+
+

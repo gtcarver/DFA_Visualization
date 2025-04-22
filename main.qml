@@ -37,11 +37,13 @@ ApplicationWindow {
             spacing: 10
 
             Button {
+                id: setAlphabetButton
                 text: "Set Alphabet"
                 onClicked: alphabetDialog.open()
             }
 
             Button {
+                id: addTransitionButton
                 text: "Add Transition"
                 onClicked: {
                     if (!mainWindow.hasOneState() || alphabet.text.length === 0) {
@@ -62,12 +64,11 @@ ApplicationWindow {
         Rectangle {
             Layout.fillWidth: true
             implicitHeight: statusText.implicitHeight
-            //color: palette.alternateBase
-            border.color: palette.alternateBase
+            color: palette.base
+            Layout.leftMargin: 10
             Label {
                 id: statusText
                 anchors.fill: parent
-                wrapMode: Text.Wrap
             }
         }
 
@@ -83,6 +84,7 @@ ApplicationWindow {
             }
 
             Button {
+                id: testButton
                 text: "Test"
                 onClicked: {
                     let validation = dfaBackend.validate_dfa()
@@ -99,6 +101,7 @@ ApplicationWindow {
             }
 
             Button {
+                id: resetButton
                 text: "Reset"
                 onClicked: {
                     dfaBackend.reset();
@@ -107,6 +110,49 @@ ApplicationWindow {
                     mainWindow.dfa_states = {};
                     statusText.text = "DFA Reset";
                     statusText.color = palette.text;
+                }
+            }
+            function toggleSimulControls() {
+                visualizeButton.visible = !visualizeButton.visible;
+                stepButton.visible = !stepButton.visible;
+                stopButton.visible = !stopButton.visible;
+                visualizeButton.enabled = !visualizeButton.enabled;
+                stepButton.enabled = !stepButton.enabled;
+                stopButton.enabled = !stopButton.enabled;
+
+                resetButton.enabled = !resetButton.enabled;
+                testButton.enabled = !testButton.enabled;
+                setAlphabetButton.enabled = !setAlphabetButton.enabled;
+                addTransitionButton.enabled = !addTransitionButton.enabled;
+
+                inputString.enabled = !inputString.enabled;
+            }
+            Button {
+                id: visualizeButton
+                Layout.preferredWidth: implicitWidth * 1.5;
+                onClicked: {
+                    parent.toggleSimulControls()
+                }
+                text: "Visualize"
+            }
+            Button {
+                id: stepButton
+                visible: false
+                enabled: false
+                implicitWidth: visualizeButton.width / 2 - 5 // - 5 for half of spacing
+                text: "Step"
+                onClicked: {
+
+                }
+            }        
+            Button {
+                id: stopButton
+                visible: false
+                enabled: false
+                implicitWidth: visualizeButton.width / 2 - 5 // - 5 for half of spacing
+                text: "Stop"
+                onClicked: {
+                    parent.toggleSimulControls()
                 }
             }
         }
@@ -384,30 +430,11 @@ ApplicationWindow {
             // boolean for determining if a self loop is created
             property bool isSelfLoop: fromState == toState
 
-            // text for non self loops
-            Text {
-                visible: !shape.isSelfLoop 
-
-                id: symbolText1
-                text: shape.symbol
-                font.bold: true
-                color: "black"
-                
-                x: (shape.a.x + shape.b.x) / 2
-                y: (shape.a.y + shape.b.y) / 2
-                // make text on transition draggable
-                DragHandler {
-                    target: symbolText1
-                }
-            }
-
-
             // arrow for non self loops
             ShapePath {
-                
                 strokeWidth: 2
-                strokeColor: !shape.isSelfLoop ? "black" : "transparent"
-                
+                strokeColor: shape.isSelfLoop ? "transparent" : "black"
+
                 PathPolyline {
                     property double q: 10
                     property double opening: 90 / 180 * Math.PI
@@ -432,26 +459,8 @@ ApplicationWindow {
                 }
             }
 
-            // text for self loops
-            Text {
-                visible: shape.isSelfLoop 
-
-                id: symbolText2
-                text: shape.symbol
-                font.bold: true
-                color: "black"
-                
-                x: shape.a.x - shape.fromState.radius / 10 // this offset is a bit funky, adjust later if needed
-                y: shape.a.y - shape.fromState.radius * 2.5
-                
-                // make text on transition draggable
-                DragHandler {
-                    target: symbolText2
-                }
-            }
             // arrow for self loops
             ShapePath {
-                
                 strokeWidth: 2
                 strokeColor: shape.isSelfLoop ? "black" : "transparent"
                 fillColor: "transparent"
@@ -476,12 +485,19 @@ ApplicationWindow {
                     ]
                 }
             }
-        }
-    }
-    Component {
-        id: selfLoop
-        Shape {
 
+            // transition label
+            Item {
+                x: shape.isSelfLoop ? shape.a.x - shape.fromState.radius / 10 : (shape.a.x + shape.b.x) / 2
+                y: shape.isSelfLoop ? shape.a.y - shape.fromState.radius * 2.5 : (shape.a.y + shape.b.y) / 2
+                Text {
+                    text: shape.symbol
+                    font.bold: true
+                    color: "black"
+
+                    DragHandler {}
+                }
+            }
         }
     }
     function hideIntro() {
