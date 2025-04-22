@@ -62,7 +62,8 @@ ApplicationWindow {
         Rectangle {
             Layout.fillWidth: true
             implicitHeight: statusText.implicitHeight
-            color: palette.alternateBase
+            //color: palette.alternateBase
+            border.color: palette.alternateBase
             Label {
                 id: statusText
                 anchors.fill: parent
@@ -219,7 +220,11 @@ ApplicationWindow {
                 statusText.text = result;
                 return;
             }
-            transitionComponent.createObject(transition_container, {fromState: mainWindow.dfa_states[fromStateCombo.currentText], toState: mainWindow.dfa_states[toStateCombo.currentText]})
+            transitionComponent.createObject(transition_container, {
+                fromState: mainWindow.dfa_states[fromStateCombo.currentText], 
+                toState: mainWindow.dfa_states[toStateCombo.currentText],
+                symbol: transitionSymbol.currentText})
+
             statusText.text = "Added transition";
             statusText.color = palette.text;
         }
@@ -343,6 +348,7 @@ ApplicationWindow {
             DragHandler {
                 target: stateVisual
             }
+
             Component.onCompleted: {
                 this.x = this.x - this.width / 2;
                 this.y = this.y - this.width / 2;
@@ -357,9 +363,11 @@ ApplicationWindow {
             anchors.fill: parent
             property Rectangle fromState
             property Rectangle toState
+            property string symbol
+
             property var a: ({x: fromState.x + fromState.width / 2, y: fromState.y + fromState.width / 2})
             property var b: ({x: toState.x + toState.width / 2, y: toState.y + toState.width / 2})
-
+            
             property double yd: b.y - a.y
             property double xd: b.x - a.x
 
@@ -371,9 +379,35 @@ ApplicationWindow {
             property double by_outer: b.y - scaleR * yd
 
             property double theta: Math.atan2(b.y - a.y, b.x - a.x)
+
+
+            // boolean for determining if a self loop is created
+            property bool isSelfLoop: fromState == toState
+
+            // text for non self loops
+            Text {
+                visible: !shape.isSelfLoop 
+
+                id: symbolText1
+                text: shape.symbol
+                font.bold: true
+                color: "black"
+                
+                x: (shape.a.x + shape.b.x) / 2
+                y: (shape.a.y + shape.b.y) / 2
+                // make text on transition draggable
+                DragHandler {
+                    target: symbolText1
+                }
+            }
+
+
+            // arrow for non self loops
             ShapePath {
+                
                 strokeWidth: 2
-                strokeColor: "black"
+                strokeColor: !shape.isSelfLoop ? "black" : "transparent"
+                
                 PathPolyline {
                     property double q: 10
                     property double opening: 90 / 180 * Math.PI
@@ -394,6 +428,51 @@ ApplicationWindow {
                             shape.bx_outer + xPreRotate * cs - yPreRotate * sn,
                             shape.by_outer + xPreRotate * sn + yPreRotate * cs
                         )
+                    ]
+                }
+            }
+
+            // text for self loops
+            Text {
+                visible: shape.isSelfLoop 
+
+                id: symbolText2
+                text: shape.symbol
+                font.bold: true
+                color: "black"
+                
+                x: shape.a.x - shape.fromState.radius / 10 // this offset is a bit funky, adjust later if needed
+                y: shape.a.y - shape.fromState.radius * 2.5
+                
+                // make text on transition draggable
+                DragHandler {
+                    target: symbolText2
+                }
+            }
+            // arrow for self loops
+            ShapePath {
+                
+                strokeWidth: 2
+                strokeColor: shape.isSelfLoop ? "black" : "transparent"
+                fillColor: "transparent"
+
+                PathAngleArc {
+                    centerX: shape.a.x
+                    centerY: shape.a.y - shape.fromState.radius * 1.5
+                    radiusX: shape.fromState.radius / 2
+                    radiusY: shape.fromState.radius / 2
+                    startAngle: 0    
+                    sweepAngle: 360  
+                }
+
+                PathPolyline {
+                    property var tip: ({x: shape.a.x, y: shape.a.y - shape.fromState.radius})
+
+                    // adjust arrowhead lengths later
+                    path: [
+                        Qt.point(tip.x - 7, tip.y - 7),
+                        Qt.point(tip.x, tip.y),
+                        Qt.point(tip.x - 7, tip.y + 7),
                     ]
                 }
             }
