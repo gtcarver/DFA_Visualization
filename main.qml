@@ -20,11 +20,24 @@ ApplicationWindow {
             return true
         return false
     }
+
+    property var currentState: null
+    property var currentStateName: null
+    property var previousState: null
+    property var previousStateName: null
+    property var activeTransition: null
+    property var inputStringIndex: 0
+    property var simActive: false
+    property var inputSymbols: []
+    property var symbolsLen: null
+    property var currentSymbol: null
+
     property color acceptStateColor: "#a5d6a7"
     property color startStateColor: "#90caf9"
     property color normalStateColor: "#ffffff"
     property color activeStateColor: "#fff59d"
     property color errorColor: "#ef9a9a"
+    property color activeTransitionColor: "#ff3333"
 
     // Main layout
 	ColumnLayout {
@@ -112,6 +125,7 @@ ApplicationWindow {
                     statusText.color = palette.text;
                 }
             }
+
             function toggleSimulControls() {
                 visualizeButton.visible = !visualizeButton.visible;
                 stepButton.visible = !stepButton.visible;
@@ -127,13 +141,74 @@ ApplicationWindow {
 
                 inputString.enabled = !inputString.enabled;
             }
+
+            function clearSim() {
+                if (mainWindow.currentState) {
+                    mainWindow.currentState.isActive = false;
+                }
+                if (mainWindow.activeTransition) {
+                    mainWindow.activeTransition.isActive = false;
+                }
+
+                mainWindow.currentState = null
+                mainWindow.currentStateName = null
+                mainWindow.previousState = null
+                mainWindow.previousStateName = null
+                mainWindow.activeTransition = null
+                mainWindow.inputStringIndex = 0
+                mainWindow.simActive = false
+                mainWindow.inputSymbols = []
+                mainWindow.symbolsLen = 0
+                mainWindow.currentSymbol = null
+            }
+
+            function findTransition(fromState, toState, symbol) {
+                for (const child of transition_container.children) {
+                    if (child.fromState === fromState && 
+                        child.toState === toState && 
+                        child.symbol === symbol) {
+                        return child;
+                    }
+                }
+                return null;
+            }
+
             Button {
                 id: visualizeButton
                 Layout.preferredWidth: implicitWidth * 1.5;
+                text: "Visualize";
                 onClicked: {
+                    if (inputString.text == "") {
+                        statusText.text = "Error: Please enter a string to visualize";
+                        statusText.color = mainWindow.errorColor;
+                        return
+                    }
+
+                    let validation = dfaBackend.validate_dfa()
+                    if (validation) {
+                        statusText.text = "Error: " + validation;
+                        statusText.color = mainWindow.errorColor;
+                        return
+                    }
+                    
+                    mainWindow.currentStateName = dfaBackend.get_start_state()
+                    mainWindow.currentState = mainWindow.dfa_states[mainWindow.currentStateName]
+
+
+                    mainWindow.currentState.isActive = true
+                    // mainWindow.currentState.border.color = mainWindow.activeColor
+
+                    mainWindow.inputSymbols = inputString.text.split("")
+                    mainWindow.symbolsLen = mainWindow.inputSymbols.length
+                    mainWindow.inputStringIndex = 0
+                    mainWindow.simActive = true
+
+
                     parent.toggleSimulControls()
+
+                    statusText.text = "Visualization started. Start state is " + mainWindow.currentStateName
+                    statusText.color = palette.text
                 }
-                text: "Visualize"
             }
             Button {
                 id: stepButton
@@ -142,7 +217,42 @@ ApplicationWindow {
                 implicitWidth: visualizeButton.width / 2 - 5 // - 5 for half of spacing
                 text: "Step"
                 onClicked: {
+                    // If it exists, deactivate current transition
+                    if (mainWindow.activeTransition) {
+                        mainWindow.activeTransition.isActive = false;
+                    }
 
+                    // Tracks previous state that still need to be modified
+                    mainWindow.previousStateName = mainWindow.currentStateName
+                    mainWindow.previousState = mainWindow.currentState
+
+                    mainWindow.currentSymbol = mainWindow.inputSymbols[mainWindow.inputStringIndex]
+                    
+                    // Take next step in simulation
+                    mainWindow.currentStateName = dfaBackend.take_step(mainWindow.previousState.stateName, mainWindow.currentSymbol)
+                    mainWindow.currentState = mainWindow.dfa_states[mainWindow.currentStateName]
+
+                    // Find the current transition to activate
+                    mainWindow.activeTransition = parent.findTransition(
+                        mainWindow.previousState,
+                        mainWindow.currentState,
+                        mainWindow.currentSymbol
+                    );
+
+                    // activate & current state & transition, deactivate old one
+                    mainWindow.previousState.isActive = false
+                    mainWindow.currentState.isActive = true
+                    mainWindow.activeTransition.isActive = true
+
+                    mainWindow.inputStringIndex = mainWindow.inputStringIndex + 1
+
+                    statusText.text = "Transitioned from " + mainWindow.previousStateName + " to " + mainWindow.currentStateName + " on symbol " + mainWindow.currentSymbol
+
+                    // Check for end of input string
+                    if (mainWindow.inputStringIndex == mainWindow.symbolsLen) {
+                        stepButton.enabled = false
+
+                    }
                 }
             }        
             Button {
@@ -152,7 +262,9 @@ ApplicationWindow {
                 implicitWidth: visualizeButton.width / 2 - 5 // - 5 for half of spacing
                 text: "Stop"
                 onClicked: {
+                    stepButton.enabled = true
                     parent.toggleSimulControls()
+                    parent.clearSim()
                 }
             }
         }
@@ -407,6 +519,10 @@ ApplicationWindow {
         Shape {
             id: shape
             anchors.fill: parent
+
+            property bool isActive: false
+            z: isActive ? 1 : 0
+
             property Rectangle fromState
             property Rectangle toState
             property string symbol
@@ -426,14 +542,13 @@ ApplicationWindow {
 
             property double theta: Math.atan2(b.y - a.y, b.x - a.x)
 
-
             // boolean for determining if a self loop is created
             property bool isSelfLoop: fromState == toState
-
+            
             // arrow for non self loops
             ShapePath {
                 strokeWidth: 2
-                strokeColor: shape.isSelfLoop ? "transparent" : "black"
+                strokeColor: shape.isSelfLoop ? "transparent" : shape.isActive ? mainWindow.activeTransitionColor : "black"
 
                 PathPolyline {
                     property double q: 10
@@ -462,7 +577,7 @@ ApplicationWindow {
             // arrow for self loops
             ShapePath {
                 strokeWidth: 2
-                strokeColor: shape.isSelfLoop ? "black" : "transparent"
+                strokeColor: !(shape.isSelfLoop) ? "transparent" : shape.isActive ? mainWindow.activeTransitionColor : "black"
                 fillColor: "transparent"
 
                 PathAngleArc {
@@ -493,7 +608,7 @@ ApplicationWindow {
                 Text {
                     text: shape.symbol
                     font.bold: true
-                    color: "black"
+                    color: shape.isActive ? mainWindow.activeTransitionColor : "black"
 
                     DragHandler {}
                 }

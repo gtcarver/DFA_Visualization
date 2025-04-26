@@ -88,5 +88,31 @@ class DFA(QObject):
         if accepting:
             self.accepting_states[self.states[name]] = True
         return 0
+    
+    # returns the name of the start state
+    @Slot(result=str)
+    def get_start_state(self) -> str:
+        if not self.start_state:
+            return ""
+        
+        for name, state in self.states.items():
+            if state == self.start_state:
+                return name
+            
+    # returns the name of the state to transtition to based off the current state and read symbol
+    # empty return string signifies an error
+    @Slot(str, str, result=str)
+    def take_step(self, current_state_name: str, symbol: str) -> str:
+        if current_state_name not in self.states or symbol not in self.alphabet:
+            return ""
 
+        current_state = self.states[current_state_name]
+        if symbol not in current_state.delta:
+            return ""
+        
+        next_state = current_state.delta[symbol]
 
+        for name, state in self.states.items():
+            if state == next_state:
+                return name
+        return ""
