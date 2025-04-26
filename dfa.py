@@ -72,6 +72,10 @@ class DFA(QObject):
     def setAlphabet(self, alphabet):
         self.alphabet = alphabet
 
+    @Slot(str, result=bool)
+    def is_in_alphabet(self, symbol) -> bool: 
+        return symbol in self.alphabet
+
     @Slot(str, str, str, result=str)
     def add_transition(self, src, symbol, dst):
         if self.states[src].delta.get(symbol):

@@ -35,7 +35,7 @@ ApplicationWindow {
     property color acceptStateColor: "#a5d6a7"
     property color startStateColor: "#90caf9"
     property color normalStateColor: "#ffffff"
-    property color activeStateColor: "#fff59d"
+    property color activeStateColor: "#ff3333"
     property color errorColor: "#ef9a9a"
     property color activeTransitionColor: "#ff3333"
 
@@ -117,6 +117,7 @@ ApplicationWindow {
                 id: resetButton
                 text: "Reset"
                 onClicked: {
+                    parent.clearSim();
                     dfaBackend.reset();
                     canvas.clear();
                     mainWindow.showIntro();
@@ -178,12 +179,6 @@ ApplicationWindow {
                 Layout.preferredWidth: implicitWidth * 1.5;
                 text: "Visualize";
                 onClicked: {
-                    if (inputString.text == "") {
-                        statusText.text = "Error: Please enter a string to visualize";
-                        statusText.color = mainWindow.errorColor;
-                        return
-                    }
-
                     let validation = dfaBackend.validate_dfa()
                     if (validation) {
                         statusText.text = "Error: " + validation;
@@ -217,6 +212,31 @@ ApplicationWindow {
                 implicitWidth: visualizeButton.width / 2 - 5 // - 5 for half of spacing
                 text: "Step"
                 onClicked: {
+                    // Check for end of input string
+                    if (mainWindow.inputStringIndex == mainWindow.symbolsLen) {
+                        stepButton.enabled = false
+                        let accepted = dfaBackend.accepts(inputString.text)
+
+                        if (mainWindow.activeTransition) mainWindow.activeTransition.isActive = false;
+
+                        if (accepted) {
+                            statusText.text = "The computation terminated in state " + 
+                                         mainWindow.currentStateName + 
+                                         ", which is an accept state. String '" + 
+                                         inputString.text + "' is accepted."
+                        }
+
+                        else {
+                            statusText.text = "The computation terminated in state " + 
+                                         mainWindow.currentStateName + 
+                                         ", which is not accept state. String '" + 
+                                         inputString.text + "' is rejected."
+                        }
+
+                        statusText.color = accepted ? "green" : "red"
+                        return
+                    }
+
                     // If it exists, deactivate current transition
                     if (mainWindow.activeTransition) {
                         mainWindow.activeTransition.isActive = false;
@@ -227,6 +247,18 @@ ApplicationWindow {
                     mainWindow.previousState = mainWindow.currentState
 
                     mainWindow.currentSymbol = mainWindow.inputSymbols[mainWindow.inputStringIndex]
+
+                    // Check to confirm symbol is in alphabet
+                    let inAlph = dfaBackend.is_in_alphabet(mainWindow.currentSymbol)
+                    if (!inAlph) {
+                        stepButton.enabled = false
+                        if (mainWindow.activeTransition) mainWindow.activeTransition.isActive = false;
+                        statusText.text = "Symbol '" + mainWindow.currentSymbol + 
+                                          "' is not in the alphabet. String '" + 
+                                          inputString.text + "' is rejected."
+                        statusText.color = "red" 
+                        return
+                    }
                     
                     // Take next step in simulation
                     mainWindow.currentStateName = dfaBackend.take_step(mainWindow.previousState.stateName, mainWindow.currentSymbol)
@@ -247,12 +279,6 @@ ApplicationWindow {
                     mainWindow.inputStringIndex = mainWindow.inputStringIndex + 1
 
                     statusText.text = "Transitioned from " + mainWindow.previousStateName + " to " + mainWindow.currentStateName + " on symbol " + mainWindow.currentSymbol
-
-                    // Check for end of input string
-                    if (mainWindow.inputStringIndex == mainWindow.symbolsLen) {
-                        stepButton.enabled = false
-
-                    }
                 }
             }        
             Button {
@@ -265,6 +291,8 @@ ApplicationWindow {
                     stepButton.enabled = true
                     parent.toggleSimulControls()
                     parent.clearSim()
+                    statusText.text = "Visualization stopped."
+                    statusText.color = palette.text
                 }
             }
         }
@@ -458,10 +486,9 @@ ApplicationWindow {
             width: 60
             height: 60
             radius: width / 2
-            color: isActive ? mainWindow.activeStateColor :
-                  (isAccept ? mainWindow.acceptStateColor :
-                  (isStart ? mainWindow.startStateColor : mainWindow.normalStateColor))
-            border.color: "black"
+            color: isAccept ? mainWindow.acceptStateColor :
+                   (isStart ? mainWindow.startStateColor : mainWindow.normalStateColor)
+            border.color: isActive ? mainWindow.activeStateColor : "black"
             border.width: 2
             
             property string stateName: ""
@@ -482,7 +509,7 @@ ApplicationWindow {
                 width: 10
                 height: 10
                 radius: width / 2
-                color: "black"
+                color: stateVisual.isActive ? mainWindow.activeStateColor : "black"
                 anchors {
                     horizontalCenter: parent.horizontalCenter
                     top: parent.bottom
@@ -497,7 +524,7 @@ ApplicationWindow {
                 height: parent.height - 10
                 radius: width / 2
                 color: "transparent"
-                border.color: "black"
+                border.color: stateVisual.isActive ? mainWindow.activeStateColor : "black"
                 border.width: 2
                 anchors.centerIn: parent
             }
