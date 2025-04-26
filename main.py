@@ -2,11 +2,10 @@ import sys
 from pathlib import Path
 from PySide6.QtGui import QGuiApplication
 from PySide6.QtQml import QQmlApplicationEngine
-from PySide6.QtCore import QObject, Slot, Property, Signal
-from dfa import DFA, State
+from dfa import DFA
 
 if __name__ == "__main__":
-    app = QGuiApplication(sys.argv)
+    app = QGuiApplication()
     engine = QQmlApplicationEngine()
 
     # Create and expose the backend object

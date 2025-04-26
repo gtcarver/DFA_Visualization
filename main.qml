@@ -6,9 +6,8 @@ import QtQuick.Controls
 import QtQuick.Layouts
 import QtQuick.Shapes
 
-
 ApplicationWindow {
-    id: mainWindow
+    id: main
     width: 1000
     height: 700
 	visible: true
@@ -16,38 +15,166 @@ ApplicationWindow {
 
     property var dfa_states: ({})
     function hasOneState(): bool {
-        for (const x in mainWindow.dfa_states)
+        for (const x in main.dfa_states)
             return true
         return false
     }
 
-    property var currentState: null
-    property var currentStateName: null
-    property var previousState: null
-    property var previousStateName: null
-    property var activeTransition: null
-    property var inputStringIndex: 0
-    property var simActive: false
-    property var inputSymbols: []
-    property var symbolsLen: null
-    property var currentSymbol: null
+    property var colors: ({
+        acceptState: "#a5d6a7",
+        startState: "#90caf9",
+        normalState: "#ffffff",
+        activeState: "#ff3333",
+        error: "#ef9a9a",
+        activeTransition: "#ff3333"
+    })
 
-    property color acceptStateColor: "#a5d6a7"
-    property color startStateColor: "#90caf9"
-    property color normalStateColor: "#ffffff"
-    property color activeStateColor: "#ff3333"
-    property color errorColor: "#ef9a9a"
-    property color activeTransitionColor: "#ff3333"
+    Item {
+        id: simulator
+        property var currentState: null
+        property var currentStateName: null
+        property var previousState: null
+        property var previousStateName: null
+        property var activeTransition: null
+        property var inputStringIndex: 0
+        property var simActive: false
+        property var inputSymbols: []
+        property var symbolsLen: null
+        property var currentSymbol: null
 
-
-    function findTransition(fromState, toState) {
-        for (const child of transition_container.children) {
-            if (child.fromState === fromState && 
-                child.toState === toState) {
-                return child;
+        function findTransition(fromState, toState) {
+            for (const child of transition_container.children) {
+                if (child.fromState === fromState && 
+                    child.toState === toState) {
+                    return child;
+                }
             }
+            return null; // No transition exists
         }
-        return null; // No transition exists
+        function clearSim() {
+            if (currentState) {
+                currentState.isActive = false;
+            }
+            if (activeTransition) {
+                activeTransition.isActive = false;
+            }
+
+            currentState = null
+            currentStateName = null
+            previousState = null
+            previousStateName = null
+            activeTransition = null
+            inputStringIndex = 0
+            simActive = false
+            inputSymbols = []
+            symbolsLen = 0
+            currentSymbol = null
+        }
+        function findTransitionWithSymbol(fromState, toState, symbol) {
+            for (const child of transition_container.children) {
+                if (child.fromState === fromState && 
+                    child.toState === toState && 
+                    child.symbol.includes(symbol)) { //child.symbol === symbol
+                    return child;
+                }
+            }
+            return null; // No transition exists
+        }
+        function start() {
+            currentStateName = dfaBackend.get_start_state()
+            currentState = main.dfa_states[currentStateName]
+
+
+            currentState.isActive = true
+            // mainWindow.currentState.border.color = mainWindow.activeColor
+
+            inputSymbols = inputString.text.split("")
+            symbolsLen = inputSymbols.length
+            inputStringIndex = 0
+            simActive = true
+
+
+            simulationControls.toggleSimulControls()
+
+            statusText.text = "Visualization started. Start state is " + currentStateName
+            statusText.color = palette.text
+        }
+        function step() {
+            // Check for end of input string
+            if (inputStringIndex == symbolsLen) {
+                stepButton.enabled = false
+                let accepted = dfaBackend.accepts(inputString.text)
+
+                if (activeTransition) activeTransition.isActive = false;
+
+                if (accepted) {
+                    statusText.text = "The computation terminated in state " + 
+                                    currentStateName + 
+                                    ", which is an accept state. String '" + 
+                                    inputString.text + "' is accepted."
+                }
+
+                else {
+                    statusText.text = "The computation terminated in state " + 
+                                    currentStateName + 
+                                    ", which is not accept state. String '" + 
+                                    inputString.text + "' is rejected."
+                }
+
+                statusText.color = accepted ? "green" : "red"
+                return
+            }
+
+            // If it exists, deactivate current transition
+            if (activeTransition) {
+                activeTransition.isActive = false;
+            }
+
+            // Tracks previous state that still need to be modified
+            previousStateName = currentStateName
+            previousState = currentState
+
+            currentSymbol = inputSymbols[inputStringIndex]
+
+            // Check to confirm symbol is in alphabet
+            let inAlph = dfaBackend.is_in_alphabet(currentSymbol)
+            if (!inAlph) {
+                stepButton.enabled = false
+                if (activeTransition) activeTransition.isActive = false;
+                statusText.text = "Symbol '" + currentSymbol + 
+                                    "' is not in the alphabet. String '" + 
+                                    inputString.text + "' is rejected."
+                statusText.color = "red" 
+                return
+            }
+            
+            // Take next step in simulation
+            currentStateName = dfaBackend.take_step(previousState.stateName, currentSymbol)
+            currentState = main.dfa_states[currentStateName]
+
+            // Find the current transition to activate
+            activeTransition = findTransitionWithSymbol(
+                previousState,
+                currentState,
+                currentSymbol
+            );
+
+            // activate & current state & transition, deactivate old one
+            previousState.isActive = false
+            currentState.isActive = true
+            activeTransition.isActive = true
+
+            inputStringIndex = inputStringIndex + 1
+
+            statusText.text = "Transitioned from " + previousStateName + " to " + currentStateName + " on symbol " + currentSymbol
+        }
+        function stop() {
+            stepButton.enabled = true
+            simulationControls.toggleSimulControls()
+            clearSim()
+            statusText.text = "Visualization stopped."
+            statusText.color = palette.text
+        }
     }
 
     // Main layout
@@ -70,9 +197,9 @@ ApplicationWindow {
                 id: addTransitionButton
                 text: "Add Transition"
                 onClicked: {
-                    if (!mainWindow.hasOneState() || alphabet.text.length === 0) {
+                    if (!main.hasOneState() || alphabet.text.length === 0) {
                         statusText.text = "Error: Adding transitions requires at least 1 state and an alphabet";
-                        statusText.color = mainWindow.errorColor;
+                        statusText.color = main.colors.error;
                         return;
                     }
                     transitionDialog.open();
@@ -98,6 +225,7 @@ ApplicationWindow {
 
         // Simulation controls
         RowLayout {
+            id: simulationControls
             Layout.fillWidth: true
             spacing: 10
 
@@ -114,7 +242,7 @@ ApplicationWindow {
                     let validation = dfaBackend.validate_dfa()
                     if (validation) {
                         statusText.text = "Error: " + validation;
-                        statusText.color = mainWindow.errorColor;
+                        statusText.color = main.colors.error;
                         return
                     }
 
@@ -128,61 +256,24 @@ ApplicationWindow {
                 id: resetButton
                 text: "Reset"
                 onClicked: {
-                    parent.clearSim();
+                    simulator.clearSim();
                     dfaBackend.reset();
                     canvas.clear();
-                    mainWindow.showIntro();
-                    mainWindow.dfa_states = {};
+                    main.showIntro();
+                    main.dfa_states = {};
                     statusText.text = "DFA Reset";
                     statusText.color = palette.text;
                 }
             }
 
             function toggleSimulControls() {
-                visualizeButton.visible = !visualizeButton.visible;
-                stepButton.visible = !stepButton.visible;
-                stopButton.visible = !stopButton.visible;
-                visualizeButton.enabled = !visualizeButton.enabled;
-                stepButton.enabled = !stepButton.enabled;
-                stopButton.enabled = !stopButton.enabled;
-
-                resetButton.enabled = !resetButton.enabled;
-                testButton.enabled = !testButton.enabled;
-                setAlphabetButton.enabled = !setAlphabetButton.enabled;
-                addTransitionButton.enabled = !addTransitionButton.enabled;
-
-                inputString.enabled = !inputString.enabled;
-            }
-
-            function clearSim() {
-                if (mainWindow.currentState) {
-                    mainWindow.currentState.isActive = false;
+                for (const comp of [visualizeButton, stepButton, stopButton]) {
+                    comp.visible = !comp.visible;
+                    comp.enabled = !comp.enabled;
                 }
-                if (mainWindow.activeTransition) {
-                    mainWindow.activeTransition.isActive = false;
+                for (const comp of [resetButton, testButton, setAlphabetButton, addTransitionButton, inputString]) {
+                    comp.enabled = !comp.enabled;
                 }
-
-                mainWindow.currentState = null
-                mainWindow.currentStateName = null
-                mainWindow.previousState = null
-                mainWindow.previousStateName = null
-                mainWindow.activeTransition = null
-                mainWindow.inputStringIndex = 0
-                mainWindow.simActive = false
-                mainWindow.inputSymbols = []
-                mainWindow.symbolsLen = 0
-                mainWindow.currentSymbol = null
-            }
-            
-            function findTransitionWithSymbol(fromState, toState, symbol) {
-                for (const child of transition_container.children) {
-                    if (child.fromState === fromState && 
-                        child.toState === toState && 
-                        child.symbol.includes(symbol)) { //child.symbol === symbol
-                        return child;
-                    }
-                }
-                return null; // No transition exists
             }
 
             Button {
@@ -193,27 +284,10 @@ ApplicationWindow {
                     let validation = dfaBackend.validate_dfa()
                     if (validation) {
                         statusText.text = "Error: " + validation;
-                        statusText.color = mainWindow.errorColor;
+                        statusText.color = main.colors.error;
                         return
                     }
-                    
-                    mainWindow.currentStateName = dfaBackend.get_start_state()
-                    mainWindow.currentState = mainWindow.dfa_states[mainWindow.currentStateName]
-
-
-                    mainWindow.currentState.isActive = true
-                    // mainWindow.currentState.border.color = mainWindow.activeColor
-
-                    mainWindow.inputSymbols = inputString.text.split("")
-                    mainWindow.symbolsLen = mainWindow.inputSymbols.length
-                    mainWindow.inputStringIndex = 0
-                    mainWindow.simActive = true
-
-
-                    parent.toggleSimulControls()
-
-                    statusText.text = "Visualization started. Start state is " + mainWindow.currentStateName
-                    statusText.color = palette.text
+                    simulator.start()
                 }
             }
             Button {
@@ -222,75 +296,7 @@ ApplicationWindow {
                 enabled: false
                 implicitWidth: visualizeButton.width / 2 - 5 // - 5 for half of spacing
                 text: "Step"
-                onClicked: {
-                    // Check for end of input string
-                    if (mainWindow.inputStringIndex == mainWindow.symbolsLen) {
-                        stepButton.enabled = false
-                        let accepted = dfaBackend.accepts(inputString.text)
-
-                        if (mainWindow.activeTransition) mainWindow.activeTransition.isActive = false;
-
-                        if (accepted) {
-                            statusText.text = "The computation terminated in state " + 
-                                         mainWindow.currentStateName + 
-                                         ", which is an accept state. String '" + 
-                                         inputString.text + "' is accepted."
-                        }
-
-                        else {
-                            statusText.text = "The computation terminated in state " + 
-                                         mainWindow.currentStateName + 
-                                         ", which is not accept state. String '" + 
-                                         inputString.text + "' is rejected."
-                        }
-
-                        statusText.color = accepted ? "green" : "red"
-                        return
-                    }
-
-                    // If it exists, deactivate current transition
-                    if (mainWindow.activeTransition) {
-                        mainWindow.activeTransition.isActive = false;
-                    }
-
-                    // Tracks previous state that still need to be modified
-                    mainWindow.previousStateName = mainWindow.currentStateName
-                    mainWindow.previousState = mainWindow.currentState
-
-                    mainWindow.currentSymbol = mainWindow.inputSymbols[mainWindow.inputStringIndex]
-
-                    // Check to confirm symbol is in alphabet
-                    let inAlph = dfaBackend.is_in_alphabet(mainWindow.currentSymbol)
-                    if (!inAlph) {
-                        stepButton.enabled = false
-                        if (mainWindow.activeTransition) mainWindow.activeTransition.isActive = false;
-                        statusText.text = "Symbol '" + mainWindow.currentSymbol + 
-                                          "' is not in the alphabet. String '" + 
-                                          inputString.text + "' is rejected."
-                        statusText.color = "red" 
-                        return
-                    }
-                    
-                    // Take next step in simulation
-                    mainWindow.currentStateName = dfaBackend.take_step(mainWindow.previousState.stateName, mainWindow.currentSymbol)
-                    mainWindow.currentState = mainWindow.dfa_states[mainWindow.currentStateName]
-
-                    // Find the current transition to activate
-                    mainWindow.activeTransition = parent.findTransitionWithSymbol(
-                        mainWindow.previousState,
-                        mainWindow.currentState,
-                        mainWindow.currentSymbol
-                    );
-
-                    // activate & current state & transition, deactivate old one
-                    mainWindow.previousState.isActive = false
-                    mainWindow.currentState.isActive = true
-                    mainWindow.activeTransition.isActive = true
-
-                    mainWindow.inputStringIndex = mainWindow.inputStringIndex + 1
-
-                    statusText.text = "Transitioned from " + mainWindow.previousStateName + " to " + mainWindow.currentStateName + " on symbol " + mainWindow.currentSymbol
-                }
+                onClicked: simulator.step()
             }        
             Button {
                 id: stopButton
@@ -298,13 +304,7 @@ ApplicationWindow {
                 enabled: false
                 implicitWidth: visualizeButton.width / 2 - 5 // - 5 for half of spacing
                 text: "Stop"
-                onClicked: {
-                    stepButton.enabled = true
-                    parent.toggleSimulControls()
-                    parent.clearSim()
-                    statusText.text = "Visualization stopped."
-                    statusText.color = palette.text
-                }
+                onClicked: simulator.stop()
             }
         }
         // Area for DFA visualization
@@ -385,14 +385,14 @@ ApplicationWindow {
             ComboBox {
                 id: fromStateCombo
                 Layout.fillWidth: true
-                model: Object.keys(mainWindow.dfa_states)
+                model: Object.keys(main.dfa_states)
             }
             
             Label { text: "To:" }
             ComboBox {
                 id: toStateCombo
                 Layout.fillWidth: true
-                model: Object.keys(mainWindow.dfa_states)
+                model: Object.keys(main.dfa_states)
             }
             
             Label { text: "On symbol:" }
@@ -403,8 +403,8 @@ ApplicationWindow {
             }
         }
         onAboutToShow: {
-            fromStateCombo.model = Object.keys(mainWindow.dfa_states);
-            toStateCombo.model = Object.keys(mainWindow.dfa_states);
+            fromStateCombo.model = Object.keys(main.dfa_states);
+            toStateCombo.model = Object.keys(main.dfa_states);
         }
         onAccepted: {
             const result = dfaBackend.add_transition(
@@ -413,13 +413,13 @@ ApplicationWindow {
                 toStateCombo.currentText
             );
             if (result) {
-                statusText.color = mainWindow.errorColor;
+                statusText.color = main.colors.error;
                 statusText.text = result;
                 return;
             }
             // check to see if a transition arrow exist, add symbol to its transition label if so
-            let transitionArrow = mainWindow.findTransition(mainWindow.dfa_states[fromStateCombo.currentText],
-                                                 mainWindow.dfa_states[toStateCombo.currentText])
+            let transitionArrow = simulator.findTransition(main.dfa_states[fromStateCombo.currentText],
+                                                 main.dfa_states[toStateCombo.currentText])
 
             if (transitionArrow) {
                 transitionArrow.transitionText.text = transitionArrow.transitionText.text + ", " + transitionSymbol.currentText
@@ -428,8 +428,8 @@ ApplicationWindow {
 
             else {
                 transitionComponent.createObject(transition_container, {
-                fromState: mainWindow.dfa_states[fromStateCombo.currentText], 
-                toState: mainWindow.dfa_states[toStateCombo.currentText],
+                fromState: main.dfa_states[fromStateCombo.currentText], 
+                toState: main.dfa_states[toStateCombo.currentText],
                 symbol: transitionSymbol.currentText})
             }
         
@@ -468,24 +468,24 @@ ApplicationWindow {
         onAccepted: {
             if (stateName.text === "") {
                 statusText.text = "Error: State name cannot be empty";
-                statusText.color = mainWindow.errorColor;
+                statusText.color = main.colors.error;
                 return;
             }
-            if (mainWindow.dfa_states[stateName.text] !== undefined) {
+            if (main.dfa_states[stateName.text] !== undefined) {
                 statusText.text = "Error: State name already exists";
-                statusText.color = mainWindow.errorColor;
+                statusText.color = main.colors.error;
                 return;
             }
 
             if (dfaBackend.add_state(stateName.text, isStartState.checked, isAcceptState.checked) === 1) {
                 statusText.text = "Error: There is already a start state. Remove it before adding a new one";
-                statusText.color = mainWindow.errorColor;
+                statusText.color = main.colors.error;
                 return;
             }
-            mainWindow.hideIntro();
+            main.hideIntro();
 
             // Create visual state
-            mainWindow.dfa_states[stateName.text] = stateComponent.createObject(state_container, {
+            main.dfa_states[stateName.text] = stateComponent.createObject(state_container, {
                 x: clickX,
                 y: clickY,
                 stateName: stateName.text,
@@ -508,9 +508,9 @@ ApplicationWindow {
             width: 60
             height: 60
             radius: width / 2
-            color: isAccept ? mainWindow.acceptStateColor :
-                   (isStart ? mainWindow.startStateColor : mainWindow.normalStateColor)
-            border.color: isActive ? mainWindow.activeStateColor : "black"
+            color: isAccept ? main.colors.acceptState :
+                   (isStart ? main.colors.startState : main.colors.normalState)
+            border.color: isActive ? main.colors.activeState : "black"
             border.width: 2
             
             property string stateName: ""
@@ -531,7 +531,7 @@ ApplicationWindow {
                 width: 10
                 height: 10
                 radius: width / 2
-                color: stateVisual.isActive ? mainWindow.activeStateColor : "black"
+                color: stateVisual.isActive ? main.colors.activeState : "black"
                 anchors {
                     horizontalCenter: parent.horizontalCenter
                     top: parent.bottom
@@ -546,15 +546,12 @@ ApplicationWindow {
                 height: parent.height - 10
                 radius: width / 2
                 color: "transparent"
-                border.color: stateVisual.isActive ? mainWindow.activeStateColor : "black"
+                border.color: stateVisual.isActive ? main.colors.activeState : "black"
                 border.width: 2
                 anchors.centerIn: parent
             }
             
-            // Make draggable
-            DragHandler {
-                target: stateVisual
-            }
+            DragHandler {}
 
             Component.onCompleted: {
                 this.x = this.x - this.width / 2;
@@ -568,8 +565,6 @@ ApplicationWindow {
         Shape {
             id: shape
             anchors.fill: parent
-
-            property alias transitionText: transitionText
 
             property bool isActive: false
             z: isActive ? 1 : 0
@@ -599,7 +594,7 @@ ApplicationWindow {
             // arrow for non self loops
             ShapePath {
                 strokeWidth: 2
-                strokeColor: shape.isSelfLoop ? "transparent" : shape.isActive ? mainWindow.activeTransitionColor : "black"
+                strokeColor: shape.isSelfLoop ? "transparent" : shape.isActive ? main.colors.activeTransition : "black"
 
                 PathPolyline {
                     property double q: 10
@@ -628,7 +623,7 @@ ApplicationWindow {
             // arrow for self loops
             ShapePath {
                 strokeWidth: 2
-                strokeColor: !(shape.isSelfLoop) ? "transparent" : shape.isActive ? mainWindow.activeTransitionColor : "black"
+                strokeColor: !(shape.isSelfLoop) ? "transparent" : shape.isActive ? main.colors.activeTransition : "black"
                 fillColor: "transparent"
 
                 PathAngleArc {
@@ -660,7 +655,7 @@ ApplicationWindow {
                     id: transitionText
                     text: shape.symbol
                     font.bold: true
-                    color: shape.isActive ? mainWindow.activeTransitionColor : "black"
+                    color: shape.isActive ? main.colors.activeTransition : "black"
 
                     DragHandler {}
                 }
