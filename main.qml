@@ -39,6 +39,17 @@ ApplicationWindow {
     property color errorColor: "#ef9a9a"
     property color activeTransitionColor: "#ff3333"
 
+
+    function findTransition(fromState, toState) {
+        for (const child of transition_container.children) {
+            if (child.fromState === fromState && 
+                child.toState === toState) {
+                return child;
+            }
+        }
+        return null; // No transition exists
+    }
+
     // Main layout
 	ColumnLayout {
         anchors.fill: parent
@@ -162,16 +173,16 @@ ApplicationWindow {
                 mainWindow.symbolsLen = 0
                 mainWindow.currentSymbol = null
             }
-
-            function findTransition(fromState, toState, symbol) {
+            
+            function findTransitionWithSymbol(fromState, toState, symbol) {
                 for (const child of transition_container.children) {
                     if (child.fromState === fromState && 
                         child.toState === toState && 
-                        child.symbol === symbol) {
+                        child.symbol.includes(symbol)) { //child.symbol === symbol
                         return child;
                     }
                 }
-                return null;
+                return null; // No transition exists
             }
 
             Button {
@@ -265,7 +276,7 @@ ApplicationWindow {
                     mainWindow.currentState = mainWindow.dfa_states[mainWindow.currentStateName]
 
                     // Find the current transition to activate
-                    mainWindow.activeTransition = parent.findTransition(
+                    mainWindow.activeTransition = parent.findTransitionWithSymbol(
                         mainWindow.previousState,
                         mainWindow.currentState,
                         mainWindow.currentSymbol
@@ -406,11 +417,22 @@ ApplicationWindow {
                 statusText.text = result;
                 return;
             }
-            transitionComponent.createObject(transition_container, {
+            // check to see if a transition arrow exist, add symbol to its transition label if so
+            let transitionArrow = mainWindow.findTransition(mainWindow.dfa_states[fromStateCombo.currentText],
+                                                 mainWindow.dfa_states[toStateCombo.currentText])
+
+            if (transitionArrow) {
+                transitionArrow.transitionText.text = transitionArrow.transitionText.text + ", " + transitionSymbol.currentText
+                transitionArrow.symbol = transitionArrow.symbol + ", " + transitionSymbol.currentText
+            }
+
+            else {
+                transitionComponent.createObject(transition_container, {
                 fromState: mainWindow.dfa_states[fromStateCombo.currentText], 
                 toState: mainWindow.dfa_states[toStateCombo.currentText],
                 symbol: transitionSymbol.currentText})
-
+            }
+        
             statusText.text = "Added transition";
             statusText.color = palette.text;
         }
@@ -547,6 +569,8 @@ ApplicationWindow {
             id: shape
             anchors.fill: parent
 
+            property alias transitionText: transitionText
+
             property bool isActive: false
             z: isActive ? 1 : 0
 
@@ -571,7 +595,7 @@ ApplicationWindow {
 
             // boolean for determining if a self loop is created
             property bool isSelfLoop: fromState == toState
-            
+
             // arrow for non self loops
             ShapePath {
                 strokeWidth: 2
@@ -633,6 +657,7 @@ ApplicationWindow {
                 x: shape.isSelfLoop ? shape.a.x - shape.fromState.radius / 10 : (shape.a.x + shape.b.x) / 2
                 y: shape.isSelfLoop ? shape.a.y - shape.fromState.radius * 2.5 : (shape.a.y + shape.b.y) / 2
                 Text {
+                    id: transitionText
                     text: shape.symbol
                     font.bold: true
                     color: shape.isActive ? mainWindow.activeTransitionColor : "black"
