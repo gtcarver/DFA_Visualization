@@ -94,6 +94,37 @@ class DFA(QObject):
             self.accepting_states[self.states[name]] = True
         return 0
     
+    # deletes state with given name (and transitions including it)
+    @Slot(str)
+    def delete_state(self, del_name: str):
+        del_state = self.states[del_name]
+        # delete transitions to & from the state
+        for name, state in self.states.items():
+            if name != del_name:
+                transitions_to_delete = []
+                for symbol, dst in state.delta.items():
+                    if dst == del_state:
+                        transitions_to_delete.append(symbol)
+                for symbol in transitions_to_delete:
+                    del state.delta[symbol]
+
+        # delete the state itself
+        if del_state in self.accepting_states:
+            del self.accepting_states[del_state]
+        if self.start_state == del_state:
+            self.start_state = None
+        del del_state
+
+    # deletes transition with given state names and symbol
+    @Slot(str, str, str)
+    def delete_transition(self, from_name:str, to_name: str, symbol: str):
+        from_state = self.states[from_name]
+        to_state = self.states[to_name]
+        for sym, dst in from_state.delta.items():
+            if dst == to_state:
+                del from_state.delta[symbol]
+                return
+    
     # returns the name of the start state
     @Slot(result=str)
     def get_start_state(self) -> str:

@@ -105,6 +105,7 @@ ApplicationWindow {
 
                 if (activeTransition)
                     activeTransition.isActive = false;
+                inputStringIndex = inputStringIndex + 1 // for input string display on canvas
                 statusText.set(`The computation terminated in state ${currentStateName}, ` +
                     `which is ${accepted ? "" : "not "}an accepting state. String '${inputString.text}' is ${accepted ? "accepted" : "rejected"}.`,
                     accepted ? main.colors.accepted : main.colors.rejected);
@@ -182,16 +183,39 @@ ApplicationWindow {
                 text: "Add Transition"
                 onClicked: {
                     if (!main.hasOneState() || alphabet.text.length === 0) {
-                        statusText.text = "Error: Adding transitions requires at least 1 state and an alphabet";
-                        statusText.color = main.colors.error;
-                        return;
+                        statusText.set("Error: Adding transitions requires at least 1 state and an alphabet", main.colors.error)
+                        return
                     }
-                    transitionDialog.open();
+                    transitionDialog.open()
+                }
+            }
+
+            Button {
+                id: deleteStateButton
+                text: "Delete State"
+                onClicked: {
+                    if (Object.keys(main.dfa_states).length == 0) {
+                        statusText.set("Error: At least 1 state is required for deletion", main.colors.error)
+                        return
+                    }
+                    deleteStateDialog.open()
+                }
+            }
+
+            Button {
+                id: deleteTransitionButton
+                text: "Delete Transition"
+                onClicked: {
+                    if (transition_container.children.length == 0) {
+                        statusText.set("Error: At least 1 transition is required for deletion", main.colors.error)
+                        return
+                    }
+                    deleteTransitionDialog.open()
                 }
             }
 
             Label {
-                text: "Alphabet: " + alphabet.text // TODO: add back comma list
+                text: "Alphabet: " + alphabet.text.split('').join(', ')
             }
         }
 
@@ -455,7 +479,7 @@ ApplicationWindow {
             let transitionArrow = simulator.findTransition(main.dfa_states[fromStateCombo.currentText],
                 main.dfa_states[toStateCombo.currentText])
             if (transitionArrow) {
-                transitionArrow.symbol += ", " + transitionSymbol.currentText
+                transitionArrow.symbol += transitionSymbol.currentText
             }
             else {
                 transitionComponent.createObject(transition_container, {
@@ -523,6 +547,127 @@ ApplicationWindow {
             stateName.text = "";
             isStartState.checked = false;
             isAcceptState.checked = false;
+        }
+    }
+
+
+    // Dialog box to delete a state
+    Dialog {
+        id: deleteStateDialog
+        title: qsTr("Delete State")
+        modal: true
+        anchors.centerIn: parent
+        width: parent.width / 3
+        standardButtons: Dialog.Ok | Dialog.Cancel
+
+        GridLayout {
+            columns: 2
+            width: parent.width
+            
+            Label { text: "Delete State:" }
+            ComboBox {
+                id: stateNameDelete
+                Layout.fillWidth: true
+                model: Object.keys(main.dfa_states)
+            }
+        }
+
+        onAboutToShow: {
+            stateNameDelete.model = Object.keys(main.dfa_states);
+        }
+
+        onAccepted: {
+            let transDelCount = 0
+            let name = stateNameDelete.currentText
+
+            for (const child of transition_container.children) {
+                    if (child.fromState.stateName == name || child.toState.stateName == name) {
+                        transDelCount += child.symbol.length;
+                        child.destroy();    
+                    }
+                    
+                }
+                for (const child of state_container.children) {
+                    if (child.stateName == name) {
+                        child.destroy();
+                        delete main.dfa_states[name];
+                        break;
+                    }
+                }
+                
+                dfaBackend.delete_state(name)
+
+                let optionalStr = transDelCount > 0 ? " " + transDelCount + " transition(s) from/to " + name + " also deleted." : ""
+                statusText.set("State " + name + " deleted successfully." + optionalStr)
+
+
+        }
+    }
+    // Dialog box to delete a transition
+    Dialog {
+        id: deleteTransitionDialog
+        title: qsTr("Delete Transition")
+        modal: true
+        anchors.centerIn: parent
+        width: parent.width / 3
+        standardButtons: Dialog.Ok | Dialog.Cancel
+
+        GridLayout {
+            columns: 2
+            width: parent.width
+            
+            Label { text: "From:" }
+            ComboBox {
+                id: fromStateDel
+                Layout.fillWidth: true
+                model: Object.keys(main.dfa_states)
+            }
+            
+            Label { text: "To:" }
+            ComboBox {
+                id: toStateDel
+                Layout.fillWidth: true
+                model: Object.keys(main.dfa_states)
+            }
+            
+            Label { text: "On symbol:" }
+            ComboBox {
+                id: symbolDel
+                Layout.fillWidth: true
+                model: alphabet.text.split("")
+            }
+        }
+        onAboutToShow: {
+            fromStateDel.model = Object.keys(main.dfa_states);
+            toStateDel.model = Object.keys(main.dfa_states);
+        }
+
+        onAccepted: {
+            let fromName = fromStateDel.currentText
+            let toName = toStateDel.currentText
+            let sym = symbolDel.currentText
+            for (const child of transition_container.children) {
+                    if (child.fromState.stateName == fromName && child.toState.stateName == toName) {
+                        if (child.symbol.includes(sym)) {
+                            if (child.symbol == sym) {
+                                child.destroy();
+                            }
+                            else {
+                                // transition component should not be deleted, only updated
+                                child.symbol = child.symbol.replace(new RegExp(sym, 'g'), '');
+                            }
+
+                            dfaBackend.delete_transition(fromName, toName, sym)
+                            statusText.set("Transition (" + fromName + ", " + sym + ") deleted successfully.")
+                            return
+                        }
+                        else {
+                            break
+                        }
+                            
+                    }
+            }
+            statusText.set("Error: transition (" + fromName + ", " + sym + ") not found", main.colors.error)
         }
     }
 	
@@ -677,7 +822,7 @@ ApplicationWindow {
                 Text {
                     x: (shape.isSelfLoop ? shape.a.x : shape.controlX + shape.v_arrowhead_orth.x * 4) - implicitWidth / 2
                     y: (shape.isSelfLoop ? shape.a.y - shape.fromState.radius * 2.5 : shape.controlY + shape.v_arrowhead_orth.y * 4) - implicitHeight / 2
-                    text: shape.symbol
+                    text: shape.symbol.split('').join(', ')
                     font.bold: true
                     color: shape.isActive ? main.colors.activeTransition : "black"
                     z: 1
