@@ -25,6 +25,8 @@ ApplicationWindow {
         startState: "#90caf9",
         normalState: "#ffffff",
         activeState: "#ff3333",
+        accepted: "green",
+        rejected: "red",
         error: "#ef9a9a",
         activeTransition: "#ff3333"
     })
@@ -39,7 +41,6 @@ ApplicationWindow {
         property var inputStringIndex: 0
         property var simActive: false
         property var inputSymbols: []
-        property var symbolsLen: null
         property var currentSymbol: null
 
         function findTransition(fromState, toState) {
@@ -67,7 +68,6 @@ ApplicationWindow {
             inputStringIndex = 0
             simActive = false
             inputSymbols = []
-            symbolsLen = 0
             currentSymbol = null
         }
         function findTransitionWithSymbol(fromState, toState, symbol) {
@@ -89,39 +89,25 @@ ApplicationWindow {
             // mainWindow.currentState.border.color = mainWindow.activeColor
 
             inputSymbols = inputString.text.split("")
-            symbolsLen = inputSymbols.length
             inputStringIndex = 0
             simActive = true
 
 
             simulationControls.toggleSimulControls()
 
-            statusText.text = "Visualization started. Start state is " + currentStateName
-            statusText.color = palette.text
+            statusText.set("Visualization started. Start state is " + currentStateName);
         }
         function step() {
             // Check for end of input string
-            if (inputStringIndex == symbolsLen) {
+            if (inputStringIndex == inputSymbols.length) {
                 stepButton.enabled = false
                 let accepted = dfaBackend.accepts(inputString.text)
 
-                if (activeTransition) activeTransition.isActive = false;
-
-                if (accepted) {
-                    statusText.text = "The computation terminated in state " + 
-                                    currentStateName + 
-                                    ", which is an accept state. String '" + 
-                                    inputString.text + "' is accepted."
-                }
-
-                else {
-                    statusText.text = "The computation terminated in state " + 
-                                    currentStateName + 
-                                    ", which is not accept state. String '" + 
-                                    inputString.text + "' is rejected."
-                }
-
-                statusText.color = accepted ? "green" : "red"
+                if (activeTransition)
+                    activeTransition.isActive = false;
+                statusText.set(`The computation terminated in state ${currentStateName}, ` +
+                    `which is ${accepted ? "" : "not "}an accepting state. String '${inputString.text}' is ${accepted ? "accepted" : "rejected"}.`,
+                    accepted ? main.colors.accepted : main.colors.rejected);
                 return
             }
 
@@ -140,11 +126,9 @@ ApplicationWindow {
             let inAlph = dfaBackend.is_in_alphabet(currentSymbol)
             if (!inAlph) {
                 stepButton.enabled = false
-                if (activeTransition) activeTransition.isActive = false;
-                statusText.text = "Symbol '" + currentSymbol + 
-                                    "' is not in the alphabet. String '" + 
-                                    inputString.text + "' is rejected."
-                statusText.color = "red" 
+                if (activeTransition)
+                    activeTransition.isActive = false;
+                statusText.set(`Symbol '${currentSymbol}' is not in the alphabet. String '${inputString.text}' is rejected.`, main.colors.rejected);
                 return
             }
             
@@ -164,7 +148,7 @@ ApplicationWindow {
             currentState.isActive = true
             activeTransition.isActive = true
 
-            inputStringIndex = inputStringIndex + 1
+            inputStringIndex++;
 
             statusText.text = "Transitioned from " + previousStateName + " to " + currentStateName + " on symbol " + currentSymbol
         }
@@ -220,6 +204,10 @@ ApplicationWindow {
             Label {
                 id: statusText
                 anchors.fill: parent
+                function set(msg, col) {
+                    text = msg;
+                    color = col || palette.text;
+                }
             }
         }
 
@@ -241,14 +229,12 @@ ApplicationWindow {
                 onClicked: {
                     let validation = dfaBackend.validate_dfa()
                     if (validation) {
-                        statusText.text = "Error: " + validation;
-                        statusText.color = main.colors.error;
+                        statusText.set("Error: " + validation, main.colors.error);
                         return
                     }
 
                     let accepted = dfaBackend.accepts(inputString.text);
-                    statusText.text = "Test result: " + (accepted ? "Accepted" : "Rejected");
-                    statusText.color = accepted ? "green" : "red";
+                    statusText.set("Test result: " + (accepted ? "Accepted" : "Rejected"), accepted ? main.colors.accepted : main.colors.rejected);
                 }
             }
 
@@ -258,11 +244,11 @@ ApplicationWindow {
                 onClicked: {
                     simulator.clearSim();
                     dfaBackend.reset();
+                    dfaBackend.setAlphabet(alphabet.text)
                     canvas.clear();
                     main.showIntro();
                     main.dfa_states = {};
-                    statusText.text = "DFA Reset";
-                    statusText.color = palette.text;
+                    statusText.set("DFA Reset");
                 }
             }
 
@@ -283,8 +269,7 @@ ApplicationWindow {
                 onClicked: {
                     let validation = dfaBackend.validate_dfa()
                     if (validation) {
-                        statusText.text = "Error: " + validation;
-                        statusText.color = main.colors.error;
+                        statusText.set("Error: " + validation, main.colors.error)
                         return
                     }
                     simulator.start()
@@ -413,19 +398,15 @@ ApplicationWindow {
                 toStateCombo.currentText
             );
             if (result) {
-                statusText.color = main.colors.error;
-                statusText.text = result;
+                statusText.set(result, main.colors.error);
                 return;
             }
             // check to see if a transition arrow exist, add symbol to its transition label if so
             let transitionArrow = simulator.findTransition(main.dfa_states[fromStateCombo.currentText],
-                                                 main.dfa_states[toStateCombo.currentText])
-
+                main.dfa_states[toStateCombo.currentText])
             if (transitionArrow) {
-                transitionArrow.transitionText.text = transitionArrow.transitionText.text + ", " + transitionSymbol.currentText
-                transitionArrow.symbol = transitionArrow.symbol + ", " + transitionSymbol.currentText
+                transitionArrow.symbol += ", " + transitionSymbol.currentText
             }
-
             else {
                 transitionComponent.createObject(transition_container, {
                 fromState: main.dfa_states[fromStateCombo.currentText], 
@@ -433,8 +414,7 @@ ApplicationWindow {
                 symbol: transitionSymbol.currentText})
             }
         
-            statusText.text = "Added transition";
-            statusText.color = palette.text;
+            statusText.set("Added transition");
         }
     }
 
@@ -467,19 +447,16 @@ ApplicationWindow {
 
         onAccepted: {
             if (stateName.text === "") {
-                statusText.text = "Error: State name cannot be empty";
-                statusText.color = main.colors.error;
+                statusText.set("Error: State name cannot be empty", main.colors.error);
                 return;
             }
             if (main.dfa_states[stateName.text] !== undefined) {
-                statusText.text = "Error: State name already exists";
-                statusText.color = main.colors.error;
+                statusText.set("Error: State name already exists", main.colors.error);
                 return;
             }
 
             if (dfaBackend.add_state(stateName.text, isStartState.checked, isAcceptState.checked) === 1) {
-                statusText.text = "Error: There is already a start state. Remove it before adding a new one";
-                statusText.color = main.colors.error;
+                statusText.set("Error: There is already a start state. Remove it before adding a new one", main.colors.error);
                 return;
             }
             main.hideIntro();
@@ -492,8 +469,7 @@ ApplicationWindow {
                 isStart: isStartState.checked,
                 isAccept: isAcceptState.checked
             });
-            statusText.text = "Added state";
-            statusText.color = palette.text;
+            statusText.set("Added state");
             stateName.text = "";
             isStartState.checked = false;
             isAcceptState.checked = false;
@@ -573,49 +549,48 @@ ApplicationWindow {
             property Rectangle toState
             property string symbol
 
-            property var a: ({x: fromState.x + fromState.width / 2, y: fromState.y + fromState.width / 2})
-            property var b: ({x: toState.x + toState.width / 2, y: toState.y + toState.width / 2})
-            
-            property double yd: b.y - a.y
-            property double xd: b.x - a.x
+            property var a: ({x: fromState.x + fromState.radius, y: fromState.y + fromState.radius})
+            property var b: ({x: toState.x + toState.radius, y: toState.y + toState.radius})
 
             // line calcs
-            property double scaleR: fromState.width / 2 / Math.hypot(b.x - a.x, b.y - a.y)
-            property double ax_outer: a.x + scaleR * xd
-            property double ay_outer: a.y + scaleR * yd
-            property double bx_outer: b.x - scaleR * xd
-            property double by_outer: b.y - scaleR * yd
+            property vector2d v: Qt.vector2d(b.x - a.x, b.y - a.y).normalized();
+            property vector2d v_orth: Qt.vector2d(-v.y, v.x);
+            property vector2d a_side: Qt.vector2d(a.x, a.y).plus(v.times(fromState.radius));
+            property vector2d b_side: Qt.vector2d(b.x, b.y).minus(v.times(fromState.radius));
+            property double controlX: (shape.a.x + shape.b.x) / 2 + 50 * shape.v_orth.x
+            property double controlY: (shape.a.y + shape.b.y) / 2 + 50 * shape.v_orth.y
+            property vector2d v_arrowhead: b_side.minus(Qt.vector2d(controlX, controlY))
+            property vector2d v_arrowhead_orth: Qt.vector2d(-v_arrowhead.y, v_arrowhead.x).normalized()
 
-            property double theta: Math.atan2(b.y - a.y, b.x - a.x)
+            function vec_to_point(v) {
+                return Qt.point(v.x, v.y)
+            }
 
             // boolean for determining if a self loop is created
             property bool isSelfLoop: fromState == toState
 
             // arrow for non self loops
             ShapePath {
+                joinStyle: ShapePath.RoundJoin
+                capStyle: ShapePath.RoundCap
                 strokeWidth: 2
                 strokeColor: shape.isSelfLoop ? "transparent" : shape.isActive ? main.colors.activeTransition : "black"
-
+                fillColor: "transparent"
+                startX: shape.a_side.x
+                startY: shape.a_side.y
+                PathQuad {
+                    x: shape.b_side.x
+                    y: shape.b_side.y
+                    controlX: shape.controlX
+                    controlY: shape.controlY
+                }
                 PathPolyline {
-                    property double q: 10
-                    property double opening: 90 / 180 * Math.PI
-                    property double xPreRotate: -q * Math.cos(opening / 2)
-                    property double yPreRotate: -q * Math.sin(opening / 2)
-                    property double yPreRotate2: q * Math.sin(opening / 2)
-                    property double sn: Math.sin(shape.theta)
-                    property double cs: Math.cos(shape.theta)
+                    property vector2d anchorPoint: shape.b_side.minus(shape.v_arrowhead.times(0.15))
+                    property vector2d offset: shape.v_arrowhead_orth.times(7)
                     path: [
-                        Qt.point(shape.ax_outer, shape.ay_outer),
-                        Qt.point(shape.bx_outer, shape.by_outer),
-                        Qt.point(
-                            shape.bx_outer + xPreRotate * cs - yPreRotate2 * sn,
-                            shape.by_outer + xPreRotate * sn + yPreRotate2 * cs
-                        ),
-                        Qt.point(shape.bx_outer, shape.by_outer),
-                        Qt.point(
-                            shape.bx_outer + xPreRotate * cs - yPreRotate * sn,
-                            shape.by_outer + xPreRotate * sn + yPreRotate * cs
-                        )
+                        shape.vec_to_point(anchorPoint.plus(offset)),
+                        shape.vec_to_point(shape.b_side),
+                        shape.vec_to_point(anchorPoint.minus(offset))
                     ]
                 }
             }
@@ -631,8 +606,8 @@ ApplicationWindow {
                     centerY: shape.a.y - shape.fromState.radius * 1.5
                     radiusX: shape.fromState.radius / 2
                     radiusY: shape.fromState.radius / 2
-                    startAngle: 0    
-                    sweepAngle: 360  
+                    startAngle: 0
+                    sweepAngle: 360
                 }
 
                 PathPolyline {
@@ -649,14 +624,13 @@ ApplicationWindow {
 
             // transition label
             Item {
-                x: shape.isSelfLoop ? shape.a.x - shape.fromState.radius / 10 : (shape.a.x + shape.b.x) / 2
-                y: shape.isSelfLoop ? shape.a.y - shape.fromState.radius * 2.5 : (shape.a.y + shape.b.y) / 2
                 Text {
-                    id: transitionText
+                    x: (shape.isSelfLoop ? shape.a.x - shape.fromState.radius / 10 : shape.controlX + shape.v_arrowhead_orth.x * 4) - implicitWidth / 2
+                    y: (shape.isSelfLoop ? shape.a.y - shape.fromState.radius * 2.5 : shape.controlY + shape.v_arrowhead_orth.y * 4) - implicitHeight / 2
                     text: shape.symbol
                     font.bold: true
                     color: shape.isActive ? main.colors.activeTransition : "black"
-
+                    z: 1
                     DragHandler {}
                 }
             }
