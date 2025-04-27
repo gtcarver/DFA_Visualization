@@ -297,7 +297,6 @@ ApplicationWindow {
             id: canvas
             Layout.fillWidth: true
             Layout.fillHeight: true
-            clip: true
             
             Item {id: state_container}
             Item {
@@ -326,35 +325,38 @@ ApplicationWindow {
                 anchors.centerIn: parent
                 text: "Double-click to begin building your DFA"
                 color: "gray"
-                visible: true
             }
             // Input string display for simulation
-            Item {
-                id: stringDisplay
+            Row {
                 visible: simulator.simActive
                 anchors {
-                    right: parent.right
-                    rightMargin: size * text.length * .75
                     bottom: parent.bottom
-                    bottomMargin: 20
+                    right: parent.right
+                    rightMargin: 6
+                    bottomMargin: 8
                 }
-                
-                property string text: inputString.text
+                property alias text: inputString.text
                 property int highlightIndex: simulator.inputStringIndex - 1
-                property int size: 16 
-                
-                Row {
-                    spacing: 2
-                    Repeater {
-                        model: stringDisplay.text.length
-                        Text {
-                            required property int index
-                            text: stringDisplay.text[index]
-                            color: index === stringDisplay.highlightIndex ? "blue" : "black"
-                            font.pixelSize: stringDisplay.size
-                            font.bold: true
-                        }
-                    }
+                Text {
+                    text: parent.text.slice(0, Math.max(parent.highlightIndex, 0)) || ""
+                    color: "black"
+                    font.bold: true
+                    font.pixelSize: 16
+                    font.letterSpacing: 2
+                }
+                Text {
+                    text: parent.text[parent.highlightIndex] || ""
+                    color: "blue"
+                    font.bold: true
+                    font.pixelSize: 16
+                    font.letterSpacing: 2
+                }
+                Text {
+                    text: parent.text.slice(parent.highlightIndex + 1) || ""
+                    color: "black"
+                    font.bold: true
+                    font.pixelSize: 16
+                    font.letterSpacing: 2
                 }
             }
 
