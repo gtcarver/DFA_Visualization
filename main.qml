@@ -328,6 +328,36 @@ ApplicationWindow {
                 color: "gray"
                 visible: true
             }
+            // Input string display for simulation
+            Item {
+                id: stringDisplay
+                visible: simulator.simActive
+                anchors {
+                    right: parent.right
+                    rightMargin: size * text.length * .75
+                    bottom: parent.bottom
+                    bottomMargin: 20
+                }
+                
+                property string text: inputString.text
+                property int highlightIndex: simulator.inputStringIndex - 1
+                property int size: 16 
+                
+                Row {
+                    spacing: 2
+                    Repeater {
+                        model: stringDisplay.text.length
+                        Text {
+                            required property int index
+                            text: stringDisplay.text[index]
+                            color: index === stringDisplay.highlightIndex ? "blue" : "black"
+                            font.pixelSize: stringDisplay.size
+                            font.bold: true
+                        }
+                    }
+                }
+            }
+
             function clear() {
                 for (const child of transition_container.children) {
                     child.layer.enabled = false;
