@@ -349,8 +349,26 @@ ApplicationWindow {
 		width: parent.width / 2
 		standardButtons: Dialog.Ok | Dialog.Cancel
 
+        property string lastAlphabet: ""
 		TextField { id: alphabet; anchors.fill: parent; placeholderText: "abc…"}
-        onAccepted: dfaBackend.setAlphabet(alphabet.text)
+        onAccepted: {
+            if (alphabet.text.length === 0) {
+                alphabet.text = lastAlphabet;
+                statusText.set("Error: alphabet may not be empty", main.colors.error)
+                return
+            }
+            let l = alphabet.text.split('').sort();
+            for (let i = 1; i < l.length; i++) {
+                if (l[i] == l[i - 1]) {
+                    alphabet.text = lastAlphabet;
+                    statusText.set(`Error: alphabet contains duplicate character '${l[i]}'`, main.colors.error);
+                    return
+                }
+            }
+            lastAlphabet = alphabet.text
+            dfaBackend.setAlphabet(alphabet.text)
+            statusText.set("Alphabet set")
+        }
 	}
 
     // Dialog box to add a transition
@@ -559,8 +577,8 @@ ApplicationWindow {
             property vector2d b_side: Qt.vector2d(b.x, b.y).minus(v.times(fromState.radius));
             property double controlX: (shape.a.x + shape.b.x) / 2 + 50 * shape.v_orth.x
             property double controlY: (shape.a.y + shape.b.y) / 2 + 50 * shape.v_orth.y
-            property vector2d v_arrowhead: b_side.minus(Qt.vector2d(controlX, controlY))
-            property vector2d v_arrowhead_orth: Qt.vector2d(-v_arrowhead.y, v_arrowhead.x).normalized()
+            property vector2d v_arrowhead: b_side.minus(Qt.vector2d(controlX, controlY)).normalized()
+            property vector2d v_arrowhead_orth: Qt.vector2d(-v_arrowhead.y, v_arrowhead.x)
 
             function vec_to_point(v) {
                 return Qt.point(v.x, v.y)
@@ -585,7 +603,7 @@ ApplicationWindow {
                     controlY: shape.controlY
                 }
                 PathPolyline {
-                    property vector2d anchorPoint: shape.b_side.minus(shape.v_arrowhead.times(0.15))
+                    property vector2d anchorPoint: shape.b_side.minus(shape.v_arrowhead.times(10))
                     property vector2d offset: shape.v_arrowhead_orth.times(7)
                     path: [
                         shape.vec_to_point(anchorPoint.plus(offset)),
@@ -625,7 +643,7 @@ ApplicationWindow {
             // transition label
             Item {
                 Text {
-                    x: (shape.isSelfLoop ? shape.a.x - shape.fromState.radius / 10 : shape.controlX + shape.v_arrowhead_orth.x * 4) - implicitWidth / 2
+                    x: (shape.isSelfLoop ? shape.a.x : shape.controlX + shape.v_arrowhead_orth.x * 4) - implicitWidth / 2
                     y: (shape.isSelfLoop ? shape.a.y - shape.fromState.radius * 2.5 : shape.controlY + shape.v_arrowhead_orth.y * 4) - implicitHeight / 2
                     text: shape.symbol
                     font.bold: true

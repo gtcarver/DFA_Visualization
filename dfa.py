@@ -19,7 +19,6 @@ class State:
     def __hash__(self):
         return hash(self.id)
 
-
 class DFA(QObject):
     def __init__(self):
         super().__init__()
@@ -43,6 +42,8 @@ class DFA(QObject):
             for symbol in self.alphabet:
                 if symbol not in self.states[state].delta:
                     return f"Invalid DFA. ({state}, {symbol}) does not have a defined transition."
+            if len(self.states[state].delta) > len(self.alphabet):
+                return f"Invalid DFA. Transition(s) exist on symbol(s) outside the alphabet."
 
 
     # Checks whether a given string is accepted by the machine
