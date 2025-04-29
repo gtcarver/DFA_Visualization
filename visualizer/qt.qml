@@ -349,7 +349,9 @@ ApplicationWindow {
             Text {
                 id: startText
                 anchors.centerIn: parent
-                text: "Double-click to begin building your DFA"
+		lineHeight: 1.5
+		horizontalAlignment: Text.AlignHCenter
+                text: "Double-click to begin building your DFA\nDrag states to move them; transitions will follow\nTransition labels can be dragged too\nOtherwise, use the toolbar at the top to modify and test the DFA\nHit \"Visualize\" when ready to see the DFA in action"
                 color: "gray"
             }
             // Input string display for simulation

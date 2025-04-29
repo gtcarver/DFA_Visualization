@@ -15,7 +15,7 @@ Any major operating systems with graphics support should be able to run this pro
 ## Dependencies
 
 #### Python
-Python version ≥3.8 is required.
+Python version ≥3.8 is require per `PySide6` requirements. Tested on 3.9, 3.12, and 3.13.
 
 #### PySide6
 
