@@ -240,6 +240,7 @@ ApplicationWindow {
         RowLayout {
             id: simulationControls
             Layout.fillWidth: true
+            Layout.leftMargin: 10
             spacing: 10
 
             TextField {
@@ -405,8 +406,8 @@ ApplicationWindow {
 		anchors.centerIn: parent
 		width: parent.width / 2
 		standardButtons: Dialog.Ok | Dialog.Cancel
-
-		TextField { id: alphabet; anchors.fill: parent; placeholderText: "abc…"; onActiveFocusChanged: if (activeFocus) selectAll()}
+        height: implicitHeight * 1.5;
+		TextField { id: alphabet; anchors.left: parent.left; anchors.right: parent.right; placeholderText: "abc…"; onActiveFocusChanged: if (activeFocus) selectAll()}
         onOpened: { alphabet.forceActiveFocus();}
         onAccepted: {
             if (alphabet.text.length === 0) {
