@@ -41,7 +41,7 @@ class DFA(QObject):
         for state in self.states:
             for symbol in self.alphabet:
                 if symbol not in self.states[state].delta:
-                    return f"Invalid DFA. ({state}, {symbol}) does not have a defined transition."
+                    return f"Invalid DFA. \u03B4({state}, {symbol}) does not have a defined transition."
             if len(self.states[state].delta) > len(self.alphabet):
                 return f"Invalid DFA. Transition(s) exist on symbol(s) outside the alphabet."
 
@@ -80,7 +80,7 @@ class DFA(QObject):
     @Slot(str, str, str, result=str)
     def add_transition(self, src, symbol, dst):
         if self.states[src].delta.get(symbol):
-            return f"({src}, {symbol}) already exists"
+            return f"\u03B4({src}, {symbol}) already exists"
         self.states[src].delta[symbol] = self.states[dst]
 
     @Slot(str, bool, bool, result=int)

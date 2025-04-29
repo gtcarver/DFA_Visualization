@@ -194,7 +194,7 @@ ApplicationWindow {
                 id: deleteStateButton
                 text: "Delete State"
                 onClicked: {
-                    if (Object.keys(main.dfa_states).length == 0) {
+                    if (!main.hasOneState()) {
                         statusText.set("Error: At least 1 state is required for deletion", main.colors.error)
                         return
                     }
@@ -599,8 +599,7 @@ ApplicationWindow {
 
                 let optionalStr = transDelCount > 0 ? " " + transDelCount + " transition(s) from/to " + name + " also deleted." : ""
                 statusText.set("State " + name + " deleted successfully." + optionalStr)
-
-
+                if (!main.hasOneState) main.showIntro(); //causing issues
         }
     }
     // Dialog box to delete a transition
@@ -658,7 +657,7 @@ ApplicationWindow {
                             }
 
                             dfaBackend.delete_transition(fromName, toName, sym)
-                            statusText.set("Transition (" + fromName + ", " + sym + ") deleted successfully.")
+                            statusText.set("Transition \u03B4(" + fromName + ", " + sym + ") deleted successfully.")
                             return
                         }
                         else {
@@ -667,7 +666,7 @@ ApplicationWindow {
                             
                     }
             }
-            statusText.set("Error: transition (" + fromName + ", " + sym + ") not found", main.colors.error)
+            statusText.set("Error: transition \u03B4(" + fromName + ", " + sym + ") not found", main.colors.error)
         }
     }
 	
