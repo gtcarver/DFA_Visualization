@@ -49,7 +49,7 @@ class DFA(QObject):
     # Checks whether a given string is accepted by the machine
     # Returns a boolean representing if the string is accepted
     @Slot(str, result=bool)
-    def accepts(self, string: str) -> bool:
+    def accepts(self, string) -> bool:
         # Transition from state to state following the symbols in the string and the transition function
         current_state = self.start_state
         for symbol in string:
@@ -70,7 +70,7 @@ class DFA(QObject):
         self.start_state = None
 
     @Slot(str)
-    def setAlphabet(self, alphabet):
+    def set_alphabet(self, alphabet):
         self.alphabet = alphabet
 
     @Slot(str, result=bool)
@@ -84,7 +84,7 @@ class DFA(QObject):
         self.states[src].delta[symbol] = self.states[dst]
 
     @Slot(str, bool, bool, result=int)
-    def add_state(self, name, start, accepting, result=int):
+    def add_state(self, name, start, accepting):
         if start and self.start_state:
             return 1
         self.states[name] = State()
@@ -96,7 +96,7 @@ class DFA(QObject):
     
     # deletes state with given name (and transitions including it)
     @Slot(str)
-    def delete_state(self, del_name: str):
+    def delete_state(self, del_name):
         del_state = self.states[del_name]
         # delete transitions to & from the state
         for name, state in self.states.items():
@@ -117,11 +117,11 @@ class DFA(QObject):
 
     # deletes transition with given state names and symbol
     @Slot(str, str, str)
-    def delete_transition(self, from_name:str, to_name: str, symbol: str):
-        from_state = self.states[from_name]
-        to_state = self.states[to_name]
-        for sym, dst in from_state.delta.items():
-            if dst == to_state:
+    def delete_transition(self, src, symbol, dst):
+        from_state = self.states[src]
+        to_state = self.states[dst]
+        for sym, dest in from_state.delta.items():
+            if dest == to_state:
                 del from_state.delta[symbol]
                 return
     
@@ -138,7 +138,7 @@ class DFA(QObject):
     # returns the name of the state to transtition to based off the current state and read symbol
     # empty return string signifies an error
     @Slot(str, str, result=str)
-    def take_step(self, current_state_name: str, symbol: str) -> str:
+    def take_step(self, current_state_name, symbol) -> str:
         if current_state_name not in self.states or symbol not in self.alphabet:
             return ""
 

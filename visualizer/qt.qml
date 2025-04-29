@@ -14,6 +14,7 @@ ApplicationWindow {
 	title: qsTr("DFA Visualizer")
 
     property var dfa_states: ({})
+    property var alphabet: ""
     function hasOneState(): bool {
         for (const x in main.dfa_states)
             return true
@@ -182,7 +183,7 @@ ApplicationWindow {
                 id: addTransitionButton
                 text: "Add Transition"
                 onClicked: {
-                    if (!main.hasOneState() || alphabet.text.length === 0) {
+                    if (!main.hasOneState() || main.alphabet.length === 0) {
                         statusText.set("Error: Adding transitions requires at least 1 state and an alphabet", main.colors.error)
                         return
                     }
@@ -215,7 +216,7 @@ ApplicationWindow {
             }
 
             Label {
-                text: "Alphabet: " + alphabet.text.split('').join(', ')
+                text: "Alphabet: " + main.alphabet.split('').join(', ')
             }
         }
 
@@ -268,7 +269,7 @@ ApplicationWindow {
                 onClicked: {
                     simulator.clearSim();
                     dfaBackend.reset();
-                    dfaBackend.setAlphabet(alphabet.text)
+                    dfaBackend.set_alphabet(main.alphabet)
                     canvas.clear();
                     main.showIntro();
                     main.dfa_states = {};
@@ -405,24 +406,24 @@ ApplicationWindow {
 		width: parent.width / 2
 		standardButtons: Dialog.Ok | Dialog.Cancel
 
-        property string lastAlphabet: ""
-		TextField { id: alphabet; anchors.fill: parent; placeholderText: "abc…"}
+		TextField { id: alphabet; anchors.fill: parent; placeholderText: "abc…"; onActiveFocusChanged: if (activeFocus) selectAll()}
+        onOpened: { alphabet.forceActiveFocus();}
         onAccepted: {
             if (alphabet.text.length === 0) {
-                alphabet.text = lastAlphabet;
+                alphabet.text = main.alphabet;
                 statusText.set("Error: alphabet may not be empty", main.colors.error)
                 return
             }
             let l = alphabet.text.split('').sort();
             for (let i = 1; i < l.length; i++) {
                 if (l[i] == l[i - 1]) {
-                    alphabet.text = lastAlphabet;
+                    alphabet.text = main.alphabet;
                     statusText.set(`Error: alphabet contains duplicate character '${l[i]}'`, main.colors.error);
                     return
                 }
             }
-            lastAlphabet = alphabet.text
-            dfaBackend.setAlphabet(alphabet.text)
+            main.alphabet = alphabet.text
+            dfaBackend.set_alphabet(main.alphabet)
             statusText.set("Alphabet set")
         }
 	}
@@ -458,7 +459,7 @@ ApplicationWindow {
             ComboBox {
                 id: transitionSymbol
                 Layout.fillWidth: true
-                model: alphabet.text.split("")
+                model: main.alphabet.split("")
             }
         }
         onAboutToShow: {
@@ -508,6 +509,7 @@ ApplicationWindow {
                 id: stateName
                 Layout.fillWidth: true
                 placeholderText: "State name (e.g. q0)"
+                onActiveFocusChanged: if (activeFocus) selectAll()
             }
             CheckBox {
                 id: isStartState
@@ -518,6 +520,8 @@ ApplicationWindow {
                 text: "Accept state"
             }
         }
+
+        onOpened: { alphabet.forceActiveFocus();}
 
         onAccepted: {
             if (stateName.text === "") {
@@ -599,7 +603,7 @@ ApplicationWindow {
 
                 let optionalStr = transDelCount > 0 ? " " + transDelCount + " transition(s) from/to " + name + " also deleted." : ""
                 statusText.set("State " + name + " deleted successfully." + optionalStr)
-                if (!main.hasOneState) main.showIntro(); //causing issues
+                if (!main.hasOneState()) main.showIntro();
         }
     }
     // Dialog box to delete a transition
@@ -633,7 +637,7 @@ ApplicationWindow {
             ComboBox {
                 id: symbolDel
                 Layout.fillWidth: true
-                model: alphabet.text.split("")
+                model: main.alphabet.split("")
             }
         }
         onAboutToShow: {
@@ -656,7 +660,7 @@ ApplicationWindow {
                                 child.symbol = child.symbol.replace(new RegExp(sym, 'g'), '');
                             }
 
-                            dfaBackend.delete_transition(fromName, toName, sym)
+                            dfaBackend.delete_transition(fromName, sym, toName)
                             statusText.set("Transition \u03B4(" + fromName + ", " + sym + ") deleted successfully.")
                             return
                         }
