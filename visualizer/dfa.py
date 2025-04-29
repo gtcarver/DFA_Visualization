@@ -3,7 +3,7 @@ from PySide6.QtCore import QObject, Property, Slot
 class State:
     _id_ = 0  # giving each state a unique id
 
-    def __init__(self, delta: {} = None):
+    def __init__(self, delta = None):
         self.id = State._id_  # assign unique id
         State._id_ += 1
         # dictionary for all transitions from the current state
@@ -32,7 +32,7 @@ class DFA(QObject):
     # Determines if dfa has a valid construction
     # Returns an error string, or None if the DFA is valid
     @Slot(result=str)
-    def validate_dfa(self) -> str | None:
+    def validate_dfa(self):
         if not self.start_state:
             return "Invalid DFA. No start state found."
         

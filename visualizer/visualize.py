@@ -1,3 +1,5 @@
+#!/usr/bin/env python3
+
 import sys
 from pathlib import Path
 from PySide6.QtGui import QGuiApplication
@@ -13,7 +15,7 @@ if __name__ == "__main__":
     engine.rootContext().setContextProperty("dfaBackend", dfa)    
 
     # Load QML file
-    qml_file = Path(__file__).resolve().parent / "main.qml"
+    qml_file = Path(__file__).resolve().parent / "qt.qml"
     engine.load(qml_file)
 
     if not engine.rootObjects():
